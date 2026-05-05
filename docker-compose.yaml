@@ -1,0 +1,15 @@
+version: "3.8"
+
+services:
+  docklog:
+    build: .
+    container_name: docklog
+    ports:
+      - "8888:8000"
+    environment:
+      - DB_PATH=${DB_PATH:-/app/data/docklog.db}
+      - SECRET_KEY=${SECRET_KEY:-secret-key-change-this}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data:/app/data
+    restart: unless-stopped
