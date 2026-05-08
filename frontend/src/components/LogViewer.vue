@@ -62,7 +62,7 @@
           <button
             @click="isFullScreen = !isFullScreen"
             class="icon-btn"
-            :title="isFullScreen ? 'Exit Full Screen' : 'Full Screen'"
+            :data-tooltip="isFullScreen ? 'Exit Full Screen' : 'Full Screen'"
           >
             <svg
               v-if="!isFullScreen"
@@ -90,7 +90,7 @@
           <button
             @click="showDownloadModal = true"
             class="icon-btn"
-            title="Download"
+            data-tooltip="Download Logs"
           >
             <svg
               viewBox="0 0 24 24"
@@ -105,7 +105,7 @@
               <line x1="12" y1="15" x2="12" y2="3"></line>
             </svg>
           </button>
-          <button @click="clearLogs" class="icon-btn" title="Clear">
+          <button @click="clearLogs" class="icon-btn" data-tooltip="Clear View">
             <svg
               viewBox="0 0 24 24"
               width="14"
@@ -124,7 +124,7 @@
             v-if="showClose"
             @click="$emit('close')"
             class="icon-btn stop"
-            title="Close"
+            data-tooltip="Close Viewer"
           >
             <svg
               viewBox="0 0 24 24"
@@ -548,7 +548,11 @@ const fetchStats = async () => {
             assignedCores: assignedCores,
             memory: `${formatBytes(used)} / ${formatBytes(data.memory_stats.limit)}`,
           };
-          emit("stats", { id: props.container.id, ...stats.value });
+          emit("stats", { 
+            id: props.container.id, 
+            cpu: parseFloat(cpuPercent.toFixed(2)), 
+            memory: used 
+          });
         } catch (e) {}
       }
     }

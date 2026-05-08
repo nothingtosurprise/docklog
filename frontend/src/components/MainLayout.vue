@@ -82,6 +82,7 @@
           to="/dashboard"
           class="nav-link"
           :class="{ active: route.path === '/dashboard' }"
+          :data-tooltip="isSidebarCollapsed ? 'Dashboard' : ''"
         >
           <svg
             viewBox="0 0 24 24"
@@ -100,6 +101,7 @@
           to="/containers"
           class="nav-link"
           :class="{ active: route.path === '/containers' }"
+          :data-tooltip="isSidebarCollapsed ? 'Containers' : ''"
         >
           <svg
             viewBox="0 0 24 24"
@@ -118,6 +120,7 @@
           to="/logs"
           class="nav-link"
           :class="{ active: route.path === '/logs' }"
+          :data-tooltip="isSidebarCollapsed ? 'Logs' : ''"
         >
           <svg
             viewBox="0 0 24 24"
@@ -138,6 +141,7 @@
           to="/health"
           class="nav-link"
           :class="{ active: route.path === '/health' }"
+          :data-tooltip="isSidebarCollapsed ? 'System Health' : ''"
         >
           <svg
             viewBox="0 0 24 24"
@@ -157,6 +161,7 @@
           to="/admin"
           class="nav-link"
           :class="{ active: route.path === '/admin' }"
+          :data-tooltip="isSidebarCollapsed ? 'User Management' : ''"
         >
           <svg
             viewBox="0 0 24 24"
@@ -177,6 +182,7 @@
           to="/audit"
           class="nav-link"
           :class="{ active: route.path === '/audit' }"
+          :data-tooltip="isSidebarCollapsed ? 'Audit Logs' : ''"
         >
           <svg
             viewBox="0 0 24 24"
@@ -198,6 +204,7 @@
           to="/settings"
           class="nav-link"
           :class="{ active: route.path === '/settings' }"
+          :data-tooltip="isSidebarCollapsed ? 'Settings' : ''"
         >
           <svg
             viewBox="0 0 24 24"

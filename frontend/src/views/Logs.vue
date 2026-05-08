@@ -48,7 +48,7 @@
           <button
             class="mini-icon-btn"
             @click="toggleTheme"
-            title="Toggle Theme"
+            data-tooltip="Toggle Theme"
           >
             <svg
               v-if="sharedState.theme === 'dark'"
@@ -86,7 +86,7 @@
           <button
             class="mini-icon-btn"
             @click="isSidebarHidden = true"
-            title="Collapse Sidebar"
+            data-tooltip="Collapse Sidebar"
           >
             <svg
               viewBox="0 0 24 24"
@@ -105,7 +105,7 @@
             class="mini-icon-btn hide-mobile"
             :class="{ 'active-toggle': splitView }"
             @click="toggleSplitView"
-            title="Toggle Split View"
+            :data-tooltip="splitView ? 'Disable Split View' : 'Enable Split View'"
           >
             <svg
               viewBox="0 0 24 24"
@@ -197,6 +197,7 @@
           :container="c"
           showClose
           @close="removeStream(c.id)"
+          @stats="handleViewerStats"
         />
       </div>
 
@@ -284,6 +285,12 @@ const containers = ref([]);
 const activeLiveId = ref(null);
 const liveStats = ref({ cpu: 0, memory: 0 });
 let liveInterval = null;
+
+const handleViewerStats = (data) => {
+  if (data.id === activeLiveId.value) {
+    liveStats.value = { cpu: data.cpu, memory: data.memory };
+  }
+};
 
 const startLiveStats = (id) => {
   activeLiveId.value = id;
@@ -627,21 +634,30 @@ watch(() => route.query, syncStateFromUrl);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-width: 0;
+  flex: 1;
 }
 
 .card-name {
   font-weight: 800;
   font-size: 0.9rem;
   color: var(--text-main);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  display: block;
+  max-width: 100%;
 }
 
 .card-image-tag {
   font-size: 0.7rem;
   color: var(--text-mute);
   font-family: monospace;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  max-width: 100%;
+  display: block;
 }
 
 /* SIDEBAR CONTROLS */

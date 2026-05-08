@@ -160,7 +160,7 @@
                 <td class="text-right" data-label="Actions">
                   <div class="action-group justify-end">
                     <button
-                      v-if="c.state !== 'running'"
+                      v-if="(sharedState.currentUser?.is_admin || sharedState.currentUser?.can_start) && c.state !== 'running'"
                       @click="triggerConfirm(c.id, 'start')"
                       class="icon-btn start"
                       data-tooltip="Start Container"
@@ -177,7 +177,7 @@
                       </svg>
                     </button>
                     <button
-                      v-if="c.state === 'running'"
+                      v-if="(sharedState.currentUser?.is_admin || sharedState.currentUser?.can_stop) && c.state === 'running'"
                       @click="triggerConfirm(c.id, 'stop')"
                       class="icon-btn stop"
                       data-tooltip="Stop Container"
@@ -194,6 +194,7 @@
                       </svg>
                     </button>
                     <button
+                      v-if="sharedState.currentUser?.is_admin || sharedState.currentUser?.can_restart"
                       @click="triggerConfirm(c.id, 'restart')"
                       class="icon-btn restart"
                       data-tooltip="Restart Container"
@@ -230,6 +231,7 @@
                       </svg>
                     </button>
                     <button
+                      v-if="sharedState.currentUser?.is_admin || sharedState.currentUser?.can_delete"
                       @click="triggerConfirm(c.id, 'remove')"
                       class="icon-btn stop"
                       data-tooltip="Delete Container"
@@ -601,37 +603,11 @@ onUnmounted(() => {
   flex-direction: column;
 }
 
-.container-title {
-  font-weight: 850;
-  color: var(--text-main);
-  font-size: 0.95rem;
-}
-.container-id {
-  font-family: "JetBrains Mono", monospace;
-  font-size: 0.7rem;
-  color: var(--text-mute);
-  font-weight: 700;
-}
-
 .image-cell {
   display: flex;
   flex-direction: column;
   text-align: left;
-}
-.image-name {
-  font-weight: 800;
-  color: var(--text-main);
-  font-size: 0.85rem;
-}
-.image-tag {
-  font-size: 0.7rem;
-  color: var(--text-mute);
-  font-weight: 700;
-  background: var(--bg-input);
-  padding: 1px 6px;
-  border-radius: 4px;
-  width: fit-content;
-  margin-top: 2px;
+  min-width: 0;
 }
 
 .status-pill {

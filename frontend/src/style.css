@@ -535,11 +535,50 @@ body {
   border-bottom: 1px solid var(--border);
   background: var(--bg-subtle);
 }
+
 .image-tag {
-  font-size: 0.65rem;
+  font-size: 0.7rem;
   color: var(--text-mute);
-  font-weight: 800;
-  text-transform: uppercase;
+  font-weight: 700;
+  background: var(--bg-input);
+  padding: 1px 6px;
+  border-radius: 4px;
+  width: fit-content;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+  display: block;
+}
+
+.container-title {
+  font-weight: 850;
+  color: var(--text-main);
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+  display: block;
+}
+
+.container-id {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.7rem;
+  color: var(--text-mute);
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+  display: block;
+}
+
+.name-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .date-label, .uptime-label {
@@ -1022,6 +1061,32 @@ body {
 }
 .premium-table td [data-tooltip]::before {
   bottom: 125%;
+}
+
+/* Position tooltips downward for header buttons to avoid clipping */
+.viewer-header [data-tooltip]::after,
+.sidebar-header [data-tooltip]::after,
+.sidebar-top-nav [data-tooltip]::after {
+  bottom: auto;
+  top: 135%;
+}
+
+.viewer-header [data-tooltip]::before,
+.sidebar-header [data-tooltip]::before,
+.sidebar-top-nav [data-tooltip]::before {
+  bottom: auto;
+  top: 120%;
+  border-top-color: transparent;
+  border-bottom-color: var(--border);
+}
+
+.viewer-header [data-tooltip]:hover::after,
+.viewer-header [data-tooltip]:hover::before,
+.sidebar-header [data-tooltip]:hover::after,
+.sidebar-header [data-tooltip]:hover::before,
+.sidebar-top-nav [data-tooltip]:hover::after,
+.sidebar-top-nav [data-tooltip]:hover::before {
+  transform: translateX(-50%) translateY(0);
 }
 
 @media (max-width: 640px) {
