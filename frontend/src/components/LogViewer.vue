@@ -590,6 +590,12 @@ const connect = () => {
     }
     if (autoScroll.value) nextTick(scrollToBottom);
   };
+  socket.onclose = () => {
+    // Only reconnect if the container is still the same and component is mounted
+    setTimeout(() => {
+      if (props.container.id) connect();
+    }, 3000);
+  };
 };
 
 onMounted(() => {

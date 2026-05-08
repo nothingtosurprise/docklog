@@ -853,25 +853,12 @@ func main() {
 	})
 
 	r.GET("/system/stats", func(c echo.Context) error {
-		v, _ := mem.VirtualMemory()
-		cp, _ := cpu.Percent(time.Second, false)
-		cpuVal := 0.0
-		if len(cp) > 0 {
-			cpuVal = cp[0]
+		sysStatsMu.RLock()
+		defer sysStatsMu.RUnlock()
+		if latestSystemStats == nil {
+			return c.JSON(http.StatusServiceUnavailable, map[string]string{"error": "Stats not ready"})
 		}
-		
-		// Try to get total host cores, fallback to runtime count
-		cores, err := cpu.Counts(true)
-		if err != nil || cores == 0 {
-			cores = runtime.NumCPU()
-		}
-
-		return c.JSON(http.StatusOK, map[string]interface{}{
-			"cpu":          cpuVal,
-			"memory":       v.Used,
-			"total_memory": v.Total,
-			"cores":        cores,
-		})
+		return c.JSON(http.StatusOK, latestSystemStats)
 	})
 
 	r.POST("/user/change-password", func(c echo.Context) error {
@@ -1091,6 +1078,45 @@ func main() {
 		return c.JSON(http.StatusOK, logs)
 	})
 
+	e.GET("/ws/system-stats", func(c echo.Context) error {
+		tokenStr := c.QueryParam("token")
+		if tokenStr == "" {
+			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Missing token"})
+		}
+		token, err := jwt.ParseWithClaims(tokenStr, &UserClaims{}, func(token *jwt.Token) (interface{}, error) {
+			return SECRET_KEY, nil
+		})
+		if err != nil || !token.Valid {
+			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid token"})
+		}
+
+		ws, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
+		if err != nil {
+			return err
+		}
+		defer ws.Close()
+
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				sysStatsMu.RLock()
+				data := latestSystemStats
+				sysStatsMu.RUnlock()
+				
+				if data != nil {
+					if err := ws.WriteJSON(data); err != nil {
+						return nil
+					}
+				}
+			case <-c.Request().Context().Done():
+				return nil
+			}
+		}
+	})
+
 	e.GET("/ws/logs/:id", func(c echo.Context) error {
 		id := c.Param("id")
 		tokenStr := c.QueryParam("token")
@@ -1224,7 +1250,40 @@ func extractContainers(res interface{}) []map[string]interface{} {
 	return nil
 }
 
+var (
+	latestSystemStats map[string]interface{}
+	sysStatsMu        sync.RWMutex
+)
+
+func systemStatsBroadcaster() {
+	for {
+		v, _ := mem.VirtualMemory()
+		cp, _ := cpu.Percent(500*time.Millisecond, false)
+		cpuVal := 0.0
+		if len(cp) > 0 {
+			cpuVal = cp[0]
+		}
+		
+		cores, err := cpu.Counts(true)
+		if err != nil || cores == 0 {
+			cores = runtime.NumCPU()
+		}
+
+		sysStatsMu.Lock()
+		latestSystemStats = map[string]interface{}{
+			"cpu":          cpuVal,
+			"memory":       v.Used,
+			"total_memory": v.Total,
+			"cores":        cores,
+		}
+		sysStatsMu.Unlock()
+		
+		time.Sleep(500 * time.Millisecond) // Total cycle ~1s (500ms sample + 500ms sleep)
+	}
+}
+
 func startStatsCollector(cli *client.Client) {
+	go systemStatsBroadcaster()
 	// Initial collection
 	collectStats(cli)
 

@@ -69,9 +69,8 @@ export const fetchSystemStats = async () => {
       sharedState.systemStats = {
         cpu: data.cpu,
         cores: data.cores || 1,
-        usedMemGB: data.memory / (1024 * 1024 * 1024),
-        totalMemGB: data.total_memory / (1024 * 1024 * 1024),
-        memory: formatBytes(data.memory) + ' / ' + formatBytes(data.total_memory)
+        memory: data.memory,
+        total_memory: data.total_memory
       };
     } else {
       handleBackendError();
@@ -89,7 +88,7 @@ const handleBackendError = () => {
   }
 };
 
-function formatBytes(bytes) {
+export function formatBytes(bytes) {
   if (bytes === 0) return '0B';
   const k = 1024;
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];

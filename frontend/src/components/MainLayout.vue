@@ -356,7 +356,8 @@
             <div class="h-stat-global" v-if="sharedState.systemStats">
               <span class="h-label">SYS MEM</span>
               <span class="h-value">
-                {{ sharedState.systemStats.memory || "0 / 0" }}
+                {{ formatBytes(sharedState.systemStats.memory || 0) }} / 
+                {{ formatBytes(sharedState.systemStats.total_memory || 0) }}
               </span>
             </div>
           </div>
@@ -551,6 +552,7 @@ import {
   fetchCurrentUser,
   fetchSystemStats,
   showToast,
+  formatBytes,
 } from "../utils/sharedState";
 import { secureStorage } from "../utils/storage";
 
@@ -663,12 +665,33 @@ onMounted(async () => {
   sharedState.showPasswordModal =
     sharedState.currentUser?.password_changed === false;
   await fetchSystemStats();
-  statsInterval = setInterval(fetchSystemStats, 5000);
+  
+  const connectSysStats = () => {
+    if (statsInterval) clearInterval(statsInterval);
+    const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+    const token = secureStorage.getItem("token");
+    const ws = new WebSocket(
+      `${protocol}//${location.host}/ws/system-stats?token=${token}`,
+    );
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        sharedState.systemStats = data;
+      } catch (e) {}
+    };
+
+    ws.onclose = () => {
+      setTimeout(connectSysStats, 3000);
+    };
+  };
+
+  connectSysStats();
+
   userInterval = setInterval(async () => {
     const current = await fetchCurrentUser();
     if (current.status === "forbidden") {
       clearInterval(userInterval);
-      if (statsInterval) clearInterval(statsInterval);
       router.replace("/login");
     }
   }, 2000);
