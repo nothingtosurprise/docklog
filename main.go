@@ -65,6 +65,7 @@ type UserClaims struct {
 	CanDelete          bool   `json:"can_delete"`
 	AllowedContainers  string `json:"allowed_containers"`
 	IsActive           bool   `json:"is_active"`
+	PasswordVersion    int    `json:"password_version"`
 	jwt.RegisteredClaims
 }
 
@@ -198,8 +199,9 @@ func main() {
 		var hashedPassword string
 		var isAdmin, passwordChanged, canStart, canStop, canRestart, canDelete, isRestricted, isActive bool
 		var allowedContainers string
-		err := db.DB.QueryRow("SELECT id, password, is_admin, password_changed, can_start, can_stop, can_restart, can_delete, is_restricted_access, allowed_containers, is_active FROM users WHERE username = ?", username).Scan(
-			&id, &hashedPassword, &isAdmin, &passwordChanged, &canStart, &canStop, &canRestart, &canDelete, &isRestricted, &allowedContainers, &isActive,
+		var passwordVersion int
+		err := db.DB.QueryRow("SELECT id, password, is_admin, password_changed, can_start, can_stop, can_restart, can_delete, is_restricted_access, allowed_containers, is_active, COALESCE(password_version, 1) FROM users WHERE username = ?", username).Scan(
+			&id, &hashedPassword, &isAdmin, &passwordChanged, &canStart, &canStop, &canRestart, &canDelete, &isRestricted, &allowedContainers, &isActive, &passwordVersion,
 		)
 		if err != nil || bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password)) != nil {
 			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid credentials"})
@@ -220,6 +222,7 @@ func main() {
 			CanDelete:          canDelete,
 			AllowedContainers:  allowedContainers,
 			IsActive:           isActive,
+			PasswordVersion:    passwordVersion,
 			RegisteredClaims: jwt.RegisteredClaims{
 				ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
 			},
@@ -283,7 +286,7 @@ func main() {
 		}))
 	}
 
-	// Password change enforcement middleware
+	// Password change enforcement & session validation middleware
 	r.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			if AuthDisabled {
@@ -293,7 +296,8 @@ func main() {
 			claims := token.Claims.(*UserClaims)
 
 			var changed, active bool
-			err := db.DB.QueryRow("SELECT password_changed, is_active FROM users WHERE id = ?", claims.ID).Scan(&changed, &active)
+			var dbPwdVersion int
+			err := db.DB.QueryRow("SELECT password_changed, is_active, COALESCE(password_version, 1) FROM users WHERE id = ?", claims.ID).Scan(&changed, &active, &dbPwdVersion)
 			if err != nil {
 				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "User verification failed"})
 			}
@@ -302,6 +306,14 @@ func main() {
 				return c.JSON(http.StatusForbidden, map[string]string{
 					"error": "Account deactivated. Please contact administrator.",
 					"code":  "ACCOUNT_DEACTIVATED",
+				})
+			}
+
+			// Session invalidation: reject tokens issued before the latest password change
+			if claims.PasswordVersion != dbPwdVersion {
+				return c.JSON(http.StatusUnauthorized, map[string]string{
+					"error": "Session invalidated. Password was changed. Please re-login.",
+					"code":  "SESSION_INVALIDATED",
 				})
 			}
 
@@ -411,6 +423,64 @@ func main() {
 		}
 		return c.JSON(http.StatusOK, list)
 	})
+
+	r.GET("/containers/:id/inspect", func(c echo.Context) error {
+		id := c.Param("id")
+		token := c.Get("user").(*jwt.Token)
+		userClaims := token.Claims.(*UserClaims)
+
+		// Always check DB for current admin status (not stale JWT)
+		var dbIsAdmin bool
+		db.DB.QueryRow("SELECT COALESCE(is_admin, 0) FROM users WHERE id = ?", userClaims.ID).Scan(&dbIsAdmin)
+
+		container, err := cli.ContainerInspect(context.Background(), id, client.ContainerInspectOptions{})
+		if err != nil {
+			return c.JSON(http.StatusNotFound, map[string]string{"error": "Container not found"})
+		}
+
+		if !dbIsAdmin {
+			containerName := strings.TrimPrefix(container.Container.Name, "/")
+			patterns := getAuthorizedPatterns(userClaims.ID)
+			authorized := false
+			for _, p := range patterns {
+				if matched, _ := regexp.MatchString(p, containerName); matched {
+					authorized = true
+					break
+				}
+			}
+			if !authorized {
+				return c.JSON(http.StatusForbidden, map[string]string{"error": "Access Denied"})
+			}
+		}
+
+		// Sanitize environment variables to prevent leaking secrets
+		if container.Container.Config != nil && len(container.Container.Config.Env) > 0 {
+			sanitized := make([]string, len(container.Container.Config.Env))
+			for i, item := range container.Container.Config.Env {
+				parts := strings.SplitN(item, "=", 2)
+				if len(parts) == 2 {
+					k := strings.ToLower(parts[0])
+					if strings.Contains(k, "pass") ||
+						strings.Contains(k, "secret") ||
+						strings.Contains(k, "key") ||
+						strings.Contains(k, "token") ||
+						strings.Contains(k, "auth") ||
+						strings.Contains(k, "pwd") ||
+						strings.Contains(k, "db_") {
+						sanitized[i] = parts[0] + "=••••••••••••"
+					} else {
+						sanitized[i] = item
+					}
+				} else {
+					sanitized[i] = item
+				}
+			}
+			container.Container.Config.Env = sanitized
+		}
+
+		return c.JSON(http.StatusOK, container)
+	})
+
 
 	r.POST("/containers/:id/action", func(c echo.Context) error {
 		id := c.Param("id")
@@ -949,7 +1019,7 @@ func main() {
 		}
 
 		h, _ := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
-		_, err := db.DB.Exec("UPDATE users SET password = ?, password_changed = 1 WHERE id = ?", string(h), user.ID)
+		_, err := db.DB.Exec("UPDATE users SET password = ?, password_changed = 1, password_version = COALESCE(password_version, 1) + 1 WHERE id = ?", string(h), user.ID)
 		if err != nil {
 			log.Printf("Error updating password for user %d: %v", user.ID, err)
 			return err
@@ -1098,7 +1168,7 @@ func main() {
 		if err != nil {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "Password is too long or invalid. Please use a shorter password."})
 		}
-		_, err = db.DB.Exec("UPDATE users SET password = ?, password_changed = 1 WHERE id = ?", string(h), id)
+		_, err = db.DB.Exec("UPDATE users SET password = ?, password_changed = 1, password_version = COALESCE(password_version, 1) + 1 WHERE id = ?", string(h), id)
 		if err != nil {
 			return err
 		}
@@ -1191,6 +1261,73 @@ func main() {
 						return nil
 					}
 				}
+			case <-c.Request().Context().Done():
+				return nil
+			}
+		}
+	})
+
+	e.GET("/ws/events", func(c echo.Context) error {
+		tokenStr := c.QueryParam("token")
+
+		var userClaims *UserClaims
+		if AuthDisabled {
+			userClaims = &UserClaims{
+				IsAdmin: true,
+			}
+		} else {
+			if tokenStr == "" {
+				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Authentication token required"})
+			}
+
+			token, err := jwt.ParseWithClaims(tokenStr, &UserClaims{}, func(token *jwt.Token) (interface{}, error) {
+				return SECRET_KEY, nil
+			})
+
+			if err != nil || !token.Valid {
+				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid token"})
+			}
+			userClaims = token.Claims.(*UserClaims)
+		}
+
+		ws, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
+		if err != nil {
+			return err
+		}
+		defer ws.Close()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		result := cli.Events(ctx, client.EventsListOptions{})
+
+		for {
+			select {
+			case msg := <-result.Messages:
+				// Filter container events or pass all events based on permissions
+				if !userClaims.IsAdmin {
+					containerName := msg.Actor.Attributes["name"]
+					if containerName == "" {
+						continue // If name is empty, skip for restricted users
+					}
+					patterns := getAuthorizedPatterns(userClaims.ID)
+					authorized := false
+					for _, p := range patterns {
+						if matched, _ := regexp.MatchString(p, containerName); matched {
+							authorized = true
+							break
+						}
+					}
+					if !authorized {
+						continue
+					}
+				}
+
+				if err := ws.WriteJSON(msg); err != nil {
+					return nil
+				}
+			case <-result.Err:
+				return nil
 			case <-c.Request().Context().Done():
 				return nil
 			}

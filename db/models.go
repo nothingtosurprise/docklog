@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"log"
 
 	_ "modernc.org/sqlite"
 )
@@ -29,7 +30,8 @@ func InitDB(dataSourceName string) error {
 		can_delete BOOLEAN DEFAULT 0,
 		is_restricted_access BOOLEAN DEFAULT 1,
 		allowed_containers TEXT DEFAULT '.*',
-		is_active BOOLEAN DEFAULT 1
+		is_active BOOLEAN DEFAULT 1,
+		password_version INTEGER DEFAULT 1
 	);
 	CREATE TABLE IF NOT EXISTS stats (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -63,5 +65,13 @@ func InitDB(dataSourceName string) error {
 		return err
 	}
 
+	// Auto-migration: add password_version column for existing databases
+	_, migErr := DB.Exec("ALTER TABLE users ADD COLUMN password_version INTEGER DEFAULT 1")
+	if migErr != nil {
+		// Column likely already exists — safe to ignore
+		log.Printf("Migration note (safe to ignore): %v", migErr)
+	}
+
 	return nil
 }
+
