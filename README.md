@@ -17,15 +17,11 @@
 </p>
 
 <p align="center">
-  Think of it as a more powerful and team-friendly alternative to Dozzle.
-</p>
-
-<p align="center">
   <img src="https://img.shields.io/docker/pulls/aimldev/docklog" alt="Docker Pulls">
   <img src="https://img.shields.io/github/license/Team-AI-ML/docklog" alt="License">
-  <img src="https://img.shields.io/badge/Backend-Go--1.24-00add8" alt="Backend">
+  <img src="https://img.shields.io/badge/version-1.0.0-0891b2" alt="Version">
+  <img src="https://img.shields.io/badge/Backend-Go-00add8" alt="Backend">
   <img src="https://img.shields.io/badge/Frontend-Vue--3-42b883" alt="Frontend">
-  <img src="https://img.shields.io/badge/UI-Compact--Airy-6366f1" alt="UI">
   <img src="https://img.shields.io/github/stars/Team-AI-ML/docklog?style=social" alt="GitHub Stars">
 </p>
 
@@ -34,8 +30,6 @@
 > ⚡ Average setup time: under 2 minutes.
 
 DockLog focuses on fast deployment, low resource usage, and team-safe Docker visibility without requiring heavyweight observability tooling.
-
-Built for developers who want real-time Docker visibility with modern operational workflows.
 
 ---
 
@@ -75,24 +69,13 @@ Track administrative actions and security events with a complete audit trail.
 
 # 🚀 Why DockLog?
 
-Most Docker log viewers are built for a single administrator.
+Most Docker log viewers are built for a single administrator. DockLog is built for the entire team.
 
-DockLog is built for the entire team.
-
-- **Team-First Security**  
-  Give developers access only to the containers they need using wildcard and regex-based RBAC.
-
-- **Audit Everything**  
-  Track exactly who restarted, stopped, or modified containers with full audit logging.
-
-- **Zero-Config Deployment**  
-  No external database. No large configuration files. Just run the container and start monitoring.
-
-- **Performance Without Compromise**  
-  Written in Go for extremely low memory and CPU usage.
-
-- **Modern Developer Experience**  
-  Fast, responsive UI designed for operational workflows.
+- **Team-First Security** — Wildcard and regex-based RBAC so developers only see the containers they need.
+- **Audit Everything** — Full trail of who started, stopped, or changed containers.
+- **Zero-Config Deployment** — No external database. Single container, embedded Vue UI, SQLite on disk.
+- **Performance Without Compromise** — Go backend with a small memory footprint.
+- **Modern UI** — Responsive dashboard with system/light/dark theme support.
 
 ---
 
@@ -100,84 +83,48 @@ DockLog is built for the entire team.
 
 ## 📜 Real-Time Log Streaming
 
-- WebSocket-based live streaming
-- Infinite scrolling through millions of log lines
-- Smart auto-scroll behavior
-- Manual history loading with progress tracking
-- RFC3339Nano precision timestamp filtering
-- Automatic reconnection handling
-- Search and filtering support
-
----
+- WebSocket live streaming with JWT subprotocol auth (no tokens in URLs)
+- Infinite scroll and manual history loading
+- Log search, highlighting, and safe HTML rendering
+- Auto-scroll with reconnect handling
+- RFC3339Nano timestamp filtering
 
 ## 🔐 Advanced RBAC
 
-- Wildcard container permissions (`backend-*`)
-- Full regex support (`^prod-.*$`)
-- Per-user action permissions
-- Restricted vs. global visibility
-- Staff account management
-- Container-level access isolation
-
----
+- Wildcard permissions (`backend-*`) and full regex (`^prod-.*$`)
+- Per-user start / stop / restart / delete rights
+- Staff management and container-level isolation
 
 ## 🕵️ Audit & Security
 
-- Full audit trail for administrative actions
+- JWT authentication with session invalidation on password change
 - First-login forced password reset
-- JWT authentication
-- Encrypted local storage
-- Connectivity monitoring
-- Backend availability detection
+- Login rate limiting
+- Client access control for the web UI (origin validation)
+- Native API clients supported via standard JWT (no shared secrets in this repo)
+- Full audit trail for sensitive actions
 
----
+See [Security & RBAC](docs/SECURITY.md) for details.
+
+## 🎨 Modern UI
+
+- Ocean/cyan design system with theme-aware logos
+- **Auto / Light / Dark** theme (follows system by default)
+- Mobile-friendly layout with responsive sidebar and search
+- Lazy-loaded routes for faster initial load
 
 ## 📊 System Monitoring
 
-- Global host CPU and memory monitoring
-- Historical usage analytics
-- Assigned core detection
-- Container memory profiling
-- Normalized CPU utilization
-- Real-time system metrics
-
----
+- Host CPU and memory with live WebSocket stats
+- Per-container metrics and historical charts
+- Health dashboard with usage trends
 
 ## ⚡ High Performance
 
-- Lightweight Go backend
-- Low memory footprint (~30MB to 50MB typical)
-- Handles thousands of log lines per second
-- Embedded frontend for single-binary deployment
-- Optimized WebSocket streaming
-- Fast container filtering
-
----
-
-# 📈 Performance Benchmarks
-
-| Metric          | Value            |
-| --------------- | ---------------- |
-| RAM Usage       | ~30MB to 50MB    |
-| Backend         | Go 1.24          |
-| Frontend        | Vue 3            |
-| Log Throughput  | 10k+ lines/sec   |
-| Deployment Type | Single Container |
-
----
-
-# 🆚 DockLog vs Alternatives
-
-| Feature                     | DockLog | Dozzle  | Loki/Grafana   |
-| --------------------------- | ------- | ------- | -------------- |
-| Real-time logs              | ✅      | ✅      | ✅             |
-| Multi-user RBAC             | ✅      | ❌      | Advanced setup |
-| Wildcard permissions        | ✅      | ❌      | Complex        |
-| Audit logging               | ✅      | ❌      | Partial        |
-| Lightweight VPS usage       | ✅      | ✅      | ❌             |
-| Single-container deployment | ✅      | ✅      | ❌             |
-| Historical observability    | Limited | Limited | ✅             |
-| Kubernetes observability    | Planned | ❌      | ✅             |
+- ~30–50 MB RAM typical
+- 10k+ log lines/sec throughput
+- Embedded frontend in a single Go binary
+- Optimized log rendering (capped DOM buffer)
 
 ---
 
@@ -185,12 +132,12 @@ DockLog is built for the entire team.
 
 | Layer            | Technology                |
 | ---------------- | ------------------------- |
-| Backend          | Go 1.24 + Echo            |
+| Backend          | Go + Echo                 |
 | Frontend         | Vue 3 + Vite              |
 | Streaming        | WebSockets                |
 | Database         | SQLite                    |
 | Container Engine | Docker SDK                |
-| Styling          | Vanilla CSS Design System |
+| Styling          | Vanilla CSS design system |
 
 ---
 
@@ -198,26 +145,43 @@ DockLog is built for the entire team.
 
 ## Environment Variables
 
-| Variable       | Description          | Default                       |
-| ------------- | -------------------- | ----------------------------- |
-| `DISABLE_AUTH`| Disable authentication (runs in No-Auth mode using `:memory:`) | `false` |
-| `ALLOW_START` | Enable starting containers in No-Auth mode   | `false`                        |
-| `ALLOW_STOP`  | Enable stopping containers in No-Auth mode   | `false`                        |
-| `ALLOW_RESTART`| Enable restarting containers in No-Auth mode | `false`                        |
-| `ALLOW_DELETE` | Enable deleting containers in No-Auth mode   | `false`                        |
-| `ALLOW_SHELL`  | Enable interactive container shell sessions (over WebSockets) | `false`                        |
-| `PORT`        | Application port     | `8000`                        |
-| `SECRET_KEY`  | JWT signing secret   | `secret-key-change-this`      |
-| `DB_PATH`     | SQLite database path | `docklog.db`                  |
+| Variable | Description | Default |
+| -------- | ----------- | ------- |
+| `SECRET_KEY` | JWT signing secret. **Required in production.** | `secret-key-change-this` |
+| `DB_PATH` | SQLite database path | `docklog.db` |
+| `PORT` | HTTP listen port | `8000` |
 | `DOCKER_HOST` | Docker daemon socket | `unix:///var/run/docker.sock` |
+| `DISABLE_AUTH` | Disable auth (in-memory DB, no login) | `false` |
+| `CLIENT_ACCESS` | Restrict `/api` and `/ws` to web UI + native clients (`strict` or `off`) | `strict` |
+| `ALLOWED_ORIGINS` | Extra browser origins for the Vue UI (comma-separated URLs) | _(empty)_ |
+| `ENV` | Set to `production` to disable localhost origin bypass | _(empty)_ |
+| `ALLOW_START` | Allow start action (no-auth mode env flags) | `false` |
+| `ALLOW_STOP` | Allow stop action | `false` |
+| `ALLOW_RESTART` | Allow restart action | `false` |
+| `ALLOW_DELETE` | Allow delete action | `false` |
+| `ALLOW_SHELL` | Allow interactive shell over WebSocket | `false` |
 
----
+### Production checklist
 
-## Generate Secure Secret Key
+1. Generate and set a strong `SECRET_KEY`:
+   ```bash
+   openssl rand -base64 32
+   ```
+2. Set `ENV=production` (or `GO_ENV=production`).
+3. Keep `CLIENT_ACCESS=strict`.
+4. Run behind Nginx, Traefik, or Caddy with HTTPS.
+5. Change the default `admin` password on first login.
+6. Restrict network access to trusted users only (Docker socket access is high privilege).
 
-```bash
-openssl rand -base64 32
-```
+### Client access
+
+| Client | How it connects |
+| ------ | --------------- |
+| **Vue web UI** | Served by DockLog; sends `X-DockLog-Client: web` and passes origin checks |
+| **Native mobile app** | Standard JWT after `POST /api/token` — no extra headers published here |
+| **curl / random sites** | Blocked when `CLIENT_ACCESS=strict` |
+
+Set `CLIENT_ACCESS=off` only for local debugging.
 
 ---
 
@@ -225,16 +189,11 @@ openssl rand -base64 32
 
 ## 👑 Administrator
 
-- Full container visibility
-- User management
-- Audit log access
-- Full container control
-
----
+Full container visibility, user management, audit log access, and container control.
 
 ## 🛠 Staff Member
 
-Container visibility is controlled using patterns such as:
+Container visibility is controlled with patterns such as:
 
 ```text
 redis
@@ -251,8 +210,8 @@ Users only see containers matching their assigned rules.
 
 ## 🔑 Default Login
 
-| Username | Password   |
-| -------- | ---------- |
+| Username | Password |
+| -------- | -------- |
 | `admin`  | `admin123` |
 
 > [!WARNING]
@@ -260,9 +219,8 @@ Users only see containers matching their assigned rules.
 
 ---
 
-# 🐳 Docker Compose
+## 🐳 Docker Compose (recommended)
 
-### Option A: Normal Auth Mode (Default)
 ```yaml
 version: "3.8"
 
@@ -275,47 +233,33 @@ services:
     environment:
       - SECRET_KEY=your-secure-key-here
       - DB_PATH=/app/data/docklog.db
+      - CLIENT_ACCESS=strict
+      - ENV=production
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./data:/app/data
     restart: unless-stopped
 ```
 
-### Option B: No-Auth Mode
-Bypasses the login screen and user database entirely, giving you immediate dashboard access:
-```yaml
-version: "3.8"
-
-services:
-  docklog:
-    image: aimldev/docklog:latest
-    container_name: docklog
-    ports:
-      - "8888:8000"
-    environment:
-      - DISABLE_AUTH=true
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    restart: unless-stopped
-```
-
-Start DockLog:
+Or build locally from this repository:
 
 ```bash
-docker compose up -d
+docker compose up --build -d
 ```
 
-Open:
+Open **http://localhost:8888**
 
-```text
-http://localhost:8888
+### No-auth mode (development only)
+
+```yaml
+environment:
+  - DISABLE_AUTH=true
 ```
 
 ---
 
-# 🐳 Direct Docker Run
+## 🐳 Direct Docker Run
 
-### Option A: Normal Auth Mode (Default)
 ```bash
 docker run -d \
   --name docklog \
@@ -324,53 +268,56 @@ docker run -d \
   -v $(pwd)/data:/app/data \
   -e SECRET_KEY=your-secure-key-here \
   -e DB_PATH=/app/data/docklog.db \
+  -e CLIENT_ACCESS=strict \
   --restart unless-stopped \
   aimldev/docklog:latest
 ```
 
-### Option B: No-Auth Mode
+---
+
+## 🧑‍💻 Local Development
+
 ```bash
-docker run -d \
-  --name docklog \
-  -p 8888:8000 \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  -e DISABLE_AUTH=true \
-  --restart unless-stopped \
-  aimldev/docklog:latest
+# Build frontend + backend
+make build
+
+# Run server (serves frontend/dist on :8000)
+./docklog
 ```
+
+Frontend dev server (separate terminal):
+
+```bash
+cd frontend && pnpm install && pnpm dev
+```
+
+Point the Vite dev proxy or API calls at `http://localhost:8000`. For unrestricted local API testing, set `CLIENT_ACCESS=off`.
 
 ---
 
 # 🔒 Docker Socket Security
 
-DockLog requires access to:
+DockLog requires access to `/var/run/docker.sock`, which grants Docker API access to the application.
 
-```text
-/var/run/docker.sock
-```
+Recommended:
 
-This effectively grants Docker API access to the application.
-
-Recommended production setup:
-
-- place behind Nginx or Traefik
-- enable HTTPS
-- restrict public access
-- expose only trusted networks
-- use strong administrator credentials
-- rotate `SECRET_KEY` periodically
+- Reverse proxy with TLS
+- Firewall or VPN for admin access
+- Strong passwords and rotated `SECRET_KEY`
+- Keep `ALLOW_SHELL=false` unless explicitly needed
 
 ---
 
 # 📂 Project Structure
 
-| Path                 | Description           |
-| -------------------- | --------------------- |
-| `main.go`            | Main Go server        |
-| `frontend/`          | Vue 3 frontend        |
-| `db/`                | SQLite initialization |
-| `.github/workflows/` | CI/CD pipelines       |
-| `docs/`              | Project documentation |
+| Path | Description |
+| ---- | ----------- |
+| `main.go` | HTTP routes, Docker integration, WebSockets |
+| `auth_helpers.go` | JWT validation, client access, rate limiting |
+| `frontend/` | Vue 3 SPA (built into `frontend/dist`) |
+| `db/` | SQLite schema and migrations |
+| `docs/` | Architecture and security documentation |
+| `.github/workflows/` | CI/CD |
 
 ---
 
@@ -381,23 +328,27 @@ Recommended production setup:
 
 ---
 
+# 📈 Performance
+
+| Metric | Value |
+| ------ | ----- |
+| RAM usage | ~30–50 MB |
+| Log throughput | 10k+ lines/sec |
+| Deployment | Single container |
+
+---
+
 # 🛣️ Roadmap
 
-Planned features:
-
-- log retention controls
-- notifications
-- API tokens
-- multi-host support
+- Log retention controls
+- Notifications
+- Multi-host support
 - Kubernetes support
-- external authentication providers
-- organization/team management
+- External authentication providers
 
 ---
 
 # 🤝 Contributing
-
-Contributions, issues, and feature requests are welcome.
 
 1. Fork the repository
 2. Create a feature branch
@@ -411,31 +362,9 @@ https://hub.docker.com/r/aimldev/docklog
 
 ---
 
-# 🔓 Open Source License
+# 🔓 License
 
-DockLog is open-source software licensed under the MIT License.
-
-You are free to:
-
-- use
-- modify
-- distribute
-- self-host
-- commercialize
-
-See the `LICENSE` file for full details.
-
----
-
-# ❤️ Support The Project
-
-If DockLog helps your workflow:
-
-- star the repository
-- report bugs
-- contribute improvements
-- share feedback
-- suggest new features
+MIT License — see [LICENSE](LICENSE).
 
 ---
 

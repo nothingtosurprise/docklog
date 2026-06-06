@@ -2,13 +2,13 @@
 
 dev:
 	@echo "Starting development server..."
-	@go run main.go & pnpm --dir frontend dev
+	@go run . & pnpm --dir frontend dev
 
 build:
 	@echo "Building frontend..."
 	@pnpm --dir frontend build
 	@echo "Building backend..."
-	@go build -o docklog main.go
+	@go build -o docklog .
 
 docker-build:
 	@echo "Building Docker image..."

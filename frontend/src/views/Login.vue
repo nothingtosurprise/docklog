@@ -3,7 +3,7 @@
     <div class="login-card glass animate-slide-up">
       <div class="login-header">
         <div class="logo-box">
-          <img src="/logo-icon.png" alt="DockLog" class="login-logo-img" />
+          <img :src="logoSrc" alt="DockLog" class="login-logo-img" />
         </div>
         <h1>DockLog</h1>
         <p class="text-mute">Enterprise Container Observability</p>
@@ -42,7 +42,7 @@
       </form>
 
       <div class="login-footer">
-        <span>v2.0.4 Platinum Edition</span>
+        <span>v{{ appVersion }}</span>
         <div class="dot-sep"></div>
         <span>Secure Protocol</span>
       </div>
@@ -51,16 +51,24 @@
 </template>
 
 <script setup>
-import { ref } from "vue";
+import { ref, computed } from "vue";
 import { useRouter } from "vue-router";
 import { secureStorage } from "../utils/storage";
+import { apiFetch } from "../utils/apiFetch";
 import { sharedState } from "../utils/sharedState";
+import pkg from "../../package.json";
+
+const appVersion = pkg.version;
 
 const router = useRouter();
 const username = ref("");
 const password = ref("");
 const loading = ref(false);
 const error = ref("");
+
+const logoSrc = computed(() =>
+  sharedState.theme === "light" ? "/logo-icon-light.png" : "/logo-icon-dark.png",
+);
 
 const handleLogin = async () => {
   loading.value = true;
@@ -71,7 +79,7 @@ const handleLogin = async () => {
     formData.append("username", username.value);
     formData.append("password", password.value);
 
-    const res = await fetch("/api/token", {
+    const res = await apiFetch("/api/token", {
       method: "POST",
       body: formData,
     });
@@ -97,10 +105,10 @@ const handleLogin = async () => {
 .login-overlay {
   position: fixed;
   inset: 0;
-  background: #020617;
-  background-image: 
-    radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
-    radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.1) 0px, transparent 50%);
+  background: var(--bg-main);
+  background-image:
+    radial-gradient(ellipse 60% 50% at 20% 0%, rgba(var(--accent-rgb), 0.18), transparent 55%),
+    radial-gradient(ellipse 50% 40% at 100% 100%, rgba(var(--success-rgb), 0.08), transparent 50%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -109,18 +117,19 @@ const handleLogin = async () => {
 
 .login-card {
   width: 100%;
-  max-width: 480px;
-  padding: 4rem;
-  border-radius: 32px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(15, 23, 42, 0.8);
-  backdrop-filter: blur(40px);
-  box-shadow: 0 40px 100px -20px rgba(0, 0, 0, 0.5);
+  max-width: 440px;
+  padding: 3rem 2.75rem;
+  border-radius: var(--radius-2xl);
+  border: 1px solid var(--border);
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  box-shadow: 0 24px 64px -16px var(--shadow);
 }
 
 .login-header {
   text-align: center;
-  margin-bottom: 3.5rem;
+  margin-bottom: 2.5rem;
 }
 
 .logo-box {
@@ -129,45 +138,46 @@ const handleLogin = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 auto 1.5rem;
+  margin: 0 auto 1.25rem;
 }
 
 .login-logo-img {
-  width: 80px;
-  height: 80px;
-  object-fit: cover;
-  border-radius: 20px;
-  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4);
+  width: 88px;
+  height: 88px;
+  object-fit: contain;
+  border-radius: var(--radius-lg);
+  filter: drop-shadow(0 12px 28px rgba(var(--accent-rgb), 0.25));
 }
 
 .login-header h1 {
-  font-size: 2.25rem;
-  font-weight: 950;
-  letter-spacing: -0.05em;
-  color: #fff;
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  color: var(--text-main);
   margin: 0;
 }
 
 .login-header p {
   font-size: 0.9rem;
-  font-weight: 600;
+  font-weight: 500;
   margin-top: 0.5rem;
+  color: var(--text-mute);
 }
 
 .login-form {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.25rem;
 }
 
 .input-group label {
   display: block;
   font-size: 0.7rem;
-  font-weight: 900;
-  color: rgba(255, 255, 255, 0.4);
+  font-weight: 700;
+  color: var(--text-mute);
   text-transform: uppercase;
-  letter-spacing: 0.15em;
-  margin-bottom: 0.75rem;
+  letter-spacing: 0.1em;
+  margin-bottom: 0.6rem;
 }
 
 .premium-input-wrapper {
@@ -178,90 +188,83 @@ const handleLogin = async () => {
 
 .premium-input-wrapper svg {
   position: absolute;
-  left: 1.25rem;
-  color: rgba(255, 255, 255, 0.2);
-  transition: color 0.3s;
+  left: 1rem;
+  color: var(--text-mute);
+  transition: color 0.2s;
+  pointer-events: none;
 }
 
 .premium-input-wrapper input {
   width: 100%;
-  padding: 1.15rem 1.25rem 1.15rem 3.5rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
-  color: #fff;
-  font-size: 1rem;
-  font-weight: 600;
-  transition: all 0.3s;
+  padding: 0.95rem 1rem 0.95rem 3rem;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-main);
+  font-size: 0.95rem;
+  font-weight: 500;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
 }
 
 .premium-input-wrapper input:focus {
   outline: none;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-subtle);
   border-color: var(--accent);
-  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.12);
 }
 
-.premium-input-wrapper input:focus + svg {
+.premium-input-wrapper:focus-within svg {
   color: var(--accent);
 }
 
 .login-btn {
-  height: 60px;
-  font-size: 1rem;
-  margin-top: 1rem;
+  height: 52px;
+  font-size: 0.95rem;
+  margin-top: 0.5rem;
 }
 
 .error-msg {
-  color: #ef4444;
-  font-size: 0.85rem;
   text-align: center;
-  font-weight: 700;
-  background: rgba(239, 68, 68, 0.1);
-  padding: 0.75rem;
-  border-radius: 12px;
-  border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
 .login-footer {
-  margin-top: 4rem;
+  margin-top: 2.5rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
+  gap: 0.75rem;
   font-size: 0.65rem;
-  font-weight: 900;
-  color: rgba(255, 255, 255, 0.2);
+  font-weight: 700;
+  color: var(--text-mute);
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
 }
 
 .dot-sep {
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--border);
 }
 
 @media (max-width: 480px) {
   .login-card {
-    padding: 2.5rem 1.5rem;
-    border-radius: 24px;
+    padding: 2rem 1.5rem;
+    border-radius: var(--radius-xl);
   }
   .login-header h1 {
-    font-size: 1.75rem;
+    font-size: 1.65rem;
   }
   .login-header {
-    margin-bottom: 2.5rem;
+    margin-bottom: 2rem;
   }
   .logo-box {
-    width: 48px;
-    height: 48px;
-    border-radius: 14px;
+    width: 72px;
+    height: 72px;
   }
-  .logo-box svg {
-    width: 24px;
-    height: 24px;
+  .login-logo-img {
+    width: 72px;
+    height: 72px;
   }
 }
 </style>

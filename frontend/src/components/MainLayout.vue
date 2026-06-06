@@ -16,13 +16,14 @@
     >
       <div class="sidebar-header">
         <router-link to="/dashboard" class="sidebar-logo">
-          <img src="/logo-icon.png" alt="DockLog" class="logo-img-sidebar" />
+          <img :src="logoSrc" alt="DockLog" class="logo-img-sidebar" />
           <span class="logo-text">DockLog</span>
         </router-link>
 
         <button
           class="sidebar-toggle-btn desktop-only"
           @click="isSidebarCollapsed = !isSidebarCollapsed"
+          aria-label="Toggle sidebar"
         >
           <svg
             viewBox="0 0 24 24"
@@ -61,6 +62,7 @@
         <button
           class="sidebar-close-btn mobile-only"
           @click="isMobileMenuOpen = false"
+          aria-label="Close menu"
         >
           <svg
             viewBox="0 0 24 24"
@@ -82,7 +84,7 @@
           to="/dashboard"
           class="nav-link"
           :class="{ active: route.path === '/dashboard' }"
-          :data-tooltip="isSidebarCollapsed ? 'Dashboard' : ''"
+          :data-tooltip="isSidebarCollapsed ? 'Dashboard' : null"
         >
           <svg
             viewBox="0 0 24 24"
@@ -101,7 +103,7 @@
           to="/containers"
           class="nav-link"
           :class="{ active: route.path === '/containers' }"
-          :data-tooltip="isSidebarCollapsed ? 'Containers' : ''"
+          :data-tooltip="isSidebarCollapsed ? 'Containers' : null"
         >
           <svg
             viewBox="0 0 24 24"
@@ -120,7 +122,7 @@
           to="/logs"
           class="nav-link"
           :class="{ active: route.path === '/logs' }"
-          :data-tooltip="isSidebarCollapsed ? 'Logs' : ''"
+          :data-tooltip="isSidebarCollapsed ? 'Logs' : null"
         >
           <svg
             viewBox="0 0 24 24"
@@ -141,7 +143,7 @@
           to="/health"
           class="nav-link"
           :class="{ active: route.path === '/health' }"
-          :data-tooltip="isSidebarCollapsed ? 'System Health' : ''"
+          :data-tooltip="isSidebarCollapsed ? 'System Health' : null"
         >
           <svg
             viewBox="0 0 24 24"
@@ -161,7 +163,7 @@
           to="/admin"
           class="nav-link"
           :class="{ active: route.path === '/admin' }"
-          :data-tooltip="isSidebarCollapsed ? 'User Management' : ''"
+          :data-tooltip="isSidebarCollapsed ? 'User Management' : null"
         >
           <svg
             viewBox="0 0 24 24"
@@ -182,7 +184,7 @@
           to="/audit"
           class="nav-link"
           :class="{ active: route.path === '/audit' }"
-          :data-tooltip="isSidebarCollapsed ? 'Audit Logs' : ''"
+          :data-tooltip="isSidebarCollapsed ? 'Audit Logs' : null"
         >
           <svg
             viewBox="0 0 24 24"
@@ -205,7 +207,7 @@
           to="/settings"
           class="nav-link"
           :class="{ active: route.path === '/settings' }"
-          :data-tooltip="isSidebarCollapsed ? 'Settings' : ''"
+          :data-tooltip="isSidebarCollapsed ? 'Settings' : null"
         >
           <svg
             viewBox="0 0 24 24"
@@ -262,6 +264,7 @@
             class="nav-icon-btn mobile-only"
             v-if="!route.path.startsWith('/logs')"
             @click="isMobileMenuOpen = true"
+            aria-label="Open menu"
           >
             <svg
               viewBox="0 0 24 24"
@@ -282,13 +285,13 @@
             class="sidebar-logo logs-route hide-mobile"
             v-if="route.path.startsWith('/logs')"
           >
-            <img src="/logo-icon.png" alt="DockLog" class="logo-img-sidebar" />
+            <img :src="logoSrc" alt="DockLog" class="logo-img-sidebar" />
             <span class="logo-text">DockLog</span>
           </router-link>
 
           <!-- Mobile Logo Brand -->
           <div class="mobile-logo-brand mobile-only">
-            <img src="/logo-icon.png" alt="DockLog" class="m-logo-img" />
+            <img :src="logoSrc" alt="DockLog" class="m-logo-img" />
             <span class="m-logo-text">DockLog</span>
           </div>
 
@@ -324,7 +327,12 @@
             </div>
           </div>
 
-          <button class="nav-icon-btn glass" @click="toggleTheme">
+          <button
+            class="nav-icon-btn glass"
+            @click="toggleTheme"
+            :data-tooltip="themeToggleLabel"
+            :aria-label="themeToggleLabel"
+          >
             <svg
               v-if="sharedState.theme === 'dark'"
               viewBox="0 0 24 24"
@@ -353,6 +361,18 @@
             </svg>
           </button>
 
+          <button
+            class="nav-icon-btn glass mobile-only"
+            @click="isMobileSearchOpen = !isMobileSearchOpen"
+            aria-label="Search containers"
+            data-tooltip="Search containers"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+          </button>
+
           <!-- Global Search -->
           <div class="search-wrapper glass desktop-only">
             <svg
@@ -374,6 +394,25 @@
           </div>
         </div>
       </header>
+
+      <div
+        v-if="isMobileSearchOpen"
+        class="mobile-search-bar mobile-only"
+      >
+        <div class="search-wrapper glass mobile-search-input">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input
+            type="text"
+            v-model="sharedState.searchQuery"
+            placeholder="Search containers..."
+            class="search-input"
+            aria-label="Search containers"
+          />
+        </div>
+      </div>
 
       <div :class="['layout-body', { 'no-padding': isLogPage }]">
         <slot v-if="!sharedState.forcePasswordChange" />
@@ -436,13 +475,16 @@
     <!-- Password Change Modal -->
     <Teleport to="body">
       <Transition name="fade">
-        <div v-if="sharedState.showPasswordModal" class="modal-overlay">
+        <div v-if="sharedState.showPasswordModal" class="modal-overlay" role="presentation">
           <div
             :class="[
               'modal-content',
               'shadow-2xl',
               { 'security-modal': sharedState.forcePasswordChange },
             ]"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="password-modal-title"
           >
             <div class="modal-icon">
               <svg
@@ -455,7 +497,7 @@
                 <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
               </svg>
             </div>
-            <h3>
+            <h3 id="password-modal-title">
               {{
                 sharedState.forcePasswordChange
                   ? "Welcome to DockLog"
@@ -466,6 +508,15 @@
               For security, please set a new password for your account to
               continue.
             </p>
+            <div v-if="!sharedState.forcePasswordChange" class="input-group">
+              <input
+                type="password"
+                v-model="currentPassword"
+                placeholder="Current password"
+                class="premium-input"
+                @input="passwordError = ''"
+              />
+            </div>
             <div class="input-group">
               <input
                 type="password"
@@ -515,31 +566,40 @@ import {
   fetchSystemStats,
   showToast,
   formatBytes,
+  toggleTheme,
 } from "../utils/sharedState";
 import { secureStorage } from "../utils/storage";
+import { createAuthenticatedWebSocket } from "../utils/wsAuth";
+import { apiFetch } from "../utils/apiFetch";
 
 const route = useRoute();
 const router = useRouter();
 const showUserMenu = ref(false);
 const isMobileMenuOpen = ref(false);
+const isMobileSearchOpen = ref(false);
 const isSidebarCollapsed = ref(false);
 const isLogPage = computed(() => route.name === "Logs");
-let statsInterval = null;
+let statsWs = null;
 let userInterval = null;
+let statsReconnectTimer = null;
+let layoutMounted = false;
 
 const newPassword = ref("");
 const confirmPassword = ref("");
+const currentPassword = ref("");
 const passwordError = ref("");
 
 const userInitial = computed(
   () => sharedState.currentUser?.username?.charAt(0).toUpperCase() || "A",
 );
 
-const toggleTheme = () => {
-  sharedState.theme = sharedState.theme === "dark" ? "light" : "dark";
-  secureStorage.setItem("theme", sharedState.theme);
-  document.documentElement.setAttribute("data-theme", sharedState.theme);
-};
+const logoSrc = computed(() =>
+  sharedState.theme === "light" ? "/logo-icon-light.png" : "/logo-icon-dark.png",
+);
+
+const themeToggleLabel = computed(() =>
+  sharedState.theme === "dark" ? "Switch to light mode" : "Switch to dark mode",
+);
 
 const getStatColor = (val) => {
   const v = parseFloat(val);
@@ -564,6 +624,7 @@ const logout = () => {
 const openPasswordModal = () => {
   newPassword.value = "";
   confirmPassword.value = "";
+  currentPassword.value = "";
   passwordError.value = "";
   sharedState.showPasswordModal = true;
   showUserMenu.value = false;
@@ -578,12 +639,19 @@ const updatePassword = async () => {
     passwordError.value = "Passwords do not match";
     return;
   }
+  if (!sharedState.forcePasswordChange && !currentPassword.value) {
+    passwordError.value = "Current password is required";
+    return;
+  }
 
   try {
     const token = secureStorage.getItem("token");
     const formData = new FormData();
     formData.append("password", newPassword.value);
-    const res = await fetch("/api/user/change-password", {
+    if (!sharedState.forcePasswordChange) {
+      formData.append("current_password", currentPassword.value);
+    }
+    const res = await apiFetch("/api/user/change-password", {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
       body: formData,
@@ -612,6 +680,7 @@ watch(
   () => route.path,
   () => {
     isMobileMenuOpen.value = false;
+    isMobileSearchOpen.value = false;
   },
 );
 
@@ -619,24 +688,34 @@ const initializeLayoutData = async () => {
   if (sharedState.forcePasswordChange) return;
 
   await fetchSystemStats();
-  
-  const connectSysStats = () => {
-    if (statsInterval) clearInterval(statsInterval);
-    const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-    const token = secureStorage.getItem("token");
-    const ws = new WebSocket(
-      `${protocol}//${location.host}/ws/system-stats?token=${token}`,
-    );
 
-    ws.onmessage = (event) => {
+  const closeStatsWs = () => {
+    if (statsReconnectTimer) {
+      clearTimeout(statsReconnectTimer);
+      statsReconnectTimer = null;
+    }
+    if (statsWs) {
+      statsWs.onclose = null;
+      statsWs.close();
+      statsWs = null;
+    }
+  };
+
+  const connectSysStats = () => {
+    closeStatsWs();
+    statsWs = createAuthenticatedWebSocket("/ws/system-stats");
+
+    statsWs.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         sharedState.systemStats = data;
       } catch (e) {}
     };
 
-    ws.onclose = () => {
-      setTimeout(connectSysStats, 3000);
+    statsWs.onclose = () => {
+      statsWs = null;
+      if (!layoutMounted) return;
+      statsReconnectTimer = setTimeout(connectSysStats, 3000);
     };
   };
 
@@ -653,6 +732,7 @@ const initializeLayoutData = async () => {
 };
 
 onMounted(async () => {
+  layoutMounted = true;
   window.addEventListener("click", handleGlobalClick);
   const session = await fetchCurrentUser();
   if (session.status === "forbidden" && !sharedState.isAuthDisabled) {
@@ -700,17 +780,30 @@ watch(
     if (!forced) {
       initializeLayoutData();
     } else {
-      if (statsInterval) clearInterval(statsInterval);
+      if (statsWs) {
+        statsWs.onclose = null;
+        statsWs.close();
+        statsWs = null;
+      }
       if (userInterval) clearInterval(userInterval);
     }
   }
 );
 
 onUnmounted(() => {
+  layoutMounted = false;
   window.removeEventListener("click", handleGlobalClick);
   window.removeEventListener("online", handleOnline);
   window.removeEventListener("offline", handleOffline);
-  if (statsInterval) clearInterval(statsInterval);
+  if (statsReconnectTimer) {
+    clearTimeout(statsReconnectTimer);
+    statsReconnectTimer = null;
+  }
+  if (statsWs) {
+    statsWs.onclose = null;
+    statsWs.close();
+    statsWs = null;
+  }
   if (userInterval) clearInterval(userInterval);
 });
 </script>
@@ -752,13 +845,14 @@ onUnmounted(() => {
 }
 
 .main-header {
-  height: 72px;
+  height: 64px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 2.5rem;
+  padding: 0 1.75rem;
   background: var(--glass-bg);
-  backdrop-filter: blur(20px);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--border);
   z-index: 100;
 }
@@ -770,10 +864,10 @@ onUnmounted(() => {
 }
 
 .title-group h2 {
-  font-size: 1.25rem;
-  font-weight: 950;
+  font-size: 1.05rem;
+  font-weight: 800;
   color: var(--text-main);
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
   margin: 0;
 }
 
@@ -786,20 +880,20 @@ onUnmounted(() => {
 .search-wrapper {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.7rem 1.25rem;
-  border-radius: 14px;
-  width: 320px;
+  gap: 0.65rem;
+  padding: 0.55rem 1rem;
+  border-radius: var(--radius-md);
+  width: 280px;
   background: var(--bg-input);
   border: 1px solid var(--border);
-  transition: all 0.3s;
+  transition: width 0.25s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .search-wrapper:focus-within {
-  width: 360px;
+  width: 320px;
   border-color: var(--accent);
   background: var(--bg-card);
-  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.12);
 }
 
 .search-icon {
@@ -818,11 +912,24 @@ onUnmounted(() => {
   outline: none;
 }
 
+.mobile-search-bar {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--glass-bg);
+}
+
+.mobile-search-input {
+  width: 100%;
+}
+
 .layout-body {
   flex: 1;
   overflow-y: auto;
-  padding: 1.5rem;
+  padding: 1.25rem 1.5rem;
   scrollbar-width: thin;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(var(--accent-rgb), 0.06), transparent 70%),
+    var(--bg-main);
 }
 
 .layout-body.no-padding {
@@ -833,32 +940,30 @@ onUnmounted(() => {
 .sidebar-profile {
   margin-top: auto;
   position: relative;
-  background: var(--bg-subtle);
+  background: var(--bg-input);
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
 }
 
 .profile-card {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 0.85rem 1rem;
+  gap: 0.85rem;
+  padding: 0.75rem 0.85rem;
   width: 100%;
   min-width: 0;
 }
 
 .sidebar-profile:hover {
-  background: var(--card-hover);
-  border-color: var(--accent);
-  transform: translateY(-2px);
-  box-shadow: 0 10px 30px var(--shadow);
+  border-color: rgba(var(--accent-rgb), 0.25);
 }
 
 .p-avatar {
   width: 42px;
   height: 42px;
   border-radius: 12px;
-  background: linear-gradient(135deg, var(--accent), #4f46e5);
+  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -866,7 +971,7 @@ onUnmounted(() => {
   font-weight: 900;
   color: #fff;
   flex-shrink: 0;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.3);
 }
 
 .p-info {
@@ -877,21 +982,22 @@ onUnmounted(() => {
 }
 
 .p-name {
-  font-size: 0.95rem;
-  font-weight: 850;
+  font-size: 0.875rem;
+  font-weight: 700;
   color: var(--text-main);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
 }
 
 .p-role {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   font-weight: 700;
-  color: var(--text-mute);
+  color: var(--accent);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
+  opacity: 0.85;
 }
 
 .logout-btn {
@@ -1110,39 +1216,42 @@ onUnmounted(() => {
 }
 
 img.logo-img-sidebar {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   object-fit: contain;
-  background: #fff;
-  border-radius: 20%;
-  border: 1px solid #2b4a64;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: none;
+  padding: 0;
 }
 
 img.m-logo-img {
   width: 32px;
   height: 32px;
   object-fit: contain;
-  background: #fff;
-  border-radius: 20%;
-  border: 1px solid #2b4a64;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: none;
+  padding: 0;
 }
 
 /* Premium Toast Notifications */
 .toast-notification {
   position: fixed;
-  top: 1.5rem;
-  right: 1.5rem;
+  top: 1.25rem;
+  right: 1.25rem;
   display: flex;
   align-items: flex-start;
-  gap: 1rem;
-  padding: 1rem 1.25rem;
-  min-width: 320px;
-  max-width: 420px;
-  background: rgba(15, 23, 42, 0.85);
-  backdrop-filter: blur(20px);
+  gap: 0.85rem;
+  padding: 0.9rem 1.1rem;
+  min-width: 300px;
+  max-width: 400px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--border);
-  border-radius: 18px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 16px 40px var(--shadow);
   z-index: 9999;
 }
 
@@ -1173,9 +1282,9 @@ img.m-logo-img {
 
 .toast-content h4 {
   margin: 0;
-  font-size: 0.95rem;
-  font-weight: 850;
-  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-main);
 }
 
 .toast-content p {
@@ -1198,8 +1307,8 @@ img.m-logo-img {
 
 .toast-close:hover {
   opacity: 1;
-  color: #fff;
-  transform: scale(1.1);
+  color: var(--text-main);
+  transform: scale(1.05);
 }
 
 /* Toast Transitions */

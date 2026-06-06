@@ -1,11 +1,46 @@
-import { reactive, ref } from 'vue';
+import { reactive } from 'vue';
 import { secureStorage } from './storage';
+import { apiFetch } from './apiFetch';
+
+export function getSystemTheme() {
+  if (typeof window === 'undefined') return 'dark';
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+function normalizeThemePreference(value) {
+  if (value === 'system') return 'auto';
+  if (value === 'light' || value === 'dark' || value === 'auto') return value;
+  return 'auto';
+}
+
+function isAutoTheme(preference) {
+  return preference === 'auto' || preference === 'system';
+}
+
+function loadThemePreference() {
+  const stored = secureStorage.getItem('theme');
+  if (!stored) return 'auto';
+  return normalizeThemePreference(stored);
+}
+
+export function resolveTheme(preference = loadThemePreference()) {
+  if (isAutoTheme(preference)) return getSystemTheme();
+  return preference;
+}
+
+const initialThemePreference = loadThemePreference();
+const initialResolvedTheme = resolveTheme(initialThemePreference);
+
+if (typeof document !== 'undefined') {
+  document.documentElement.setAttribute('data-theme', initialResolvedTheme);
+}
 
 export const sharedState = reactive({
   currentUser: null,
   systemStats: { cpu: 0, usedMemGB: 0, memory: '0 / 0' },
   searchQuery: '',
-  theme: secureStorage.getItem('theme') || 'dark',
+  themePreference: initialThemePreference,
+  theme: initialResolvedTheme,
   showPasswordModal: false,
   forcePasswordChange: false,
   dashboardSidebarOpen: typeof window !== 'undefined' ? window.innerWidth > 1024 : true,
@@ -22,7 +57,34 @@ export const sharedState = reactive({
   envStopPermission: true,
   envRestartPermission: true,
   envDeletePermission: true,
+  isBackendDisconnected: false,
 });
+
+export function applyTheme(preference) {
+  const normalized = normalizeThemePreference(preference);
+  sharedState.themePreference = normalized;
+  sharedState.theme = resolveTheme(normalized);
+  secureStorage.setItem('theme', normalized);
+  document.documentElement.setAttribute('data-theme', sharedState.theme);
+}
+
+export function toggleTheme() {
+  applyTheme(sharedState.theme === 'dark' ? 'light' : 'dark');
+}
+
+export function initThemeListener() {
+  if (typeof window === 'undefined') return () => {};
+
+  const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+  const handleChange = () => {
+    if (!isAutoTheme(sharedState.themePreference)) return;
+    sharedState.theme = getSystemTheme();
+    document.documentElement.setAttribute('data-theme', sharedState.theme);
+  };
+
+  mediaQuery.addEventListener('change', handleChange);
+  return () => mediaQuery.removeEventListener('change', handleChange);
+}
 
 export const showToast = (title, message, type = 'success') => {
   sharedState.toast.title = title;
@@ -51,7 +113,7 @@ export const fetchCurrentUser = async () => {
   const token = secureStorage.getItem('token');
   if (!token) return { status: 'missing', user: null };
   try {
-    const res = await fetch('/api/user/me', {
+    const res = await apiFetch('/api/user/me', {
       headers: { Authorization: `Bearer ${token}` }
     });
     if (res.ok) {
@@ -74,7 +136,7 @@ export const fetchSystemStats = async () => {
   const token = secureStorage.getItem('token');
   if (!token) return;
   try {
-    const res = await fetch('/api/system/stats', {
+    const res = await apiFetch('/api/system/stats', {
       headers: { Authorization: `Bearer ${token}` }
     });
     if (res.ok) {

@@ -427,6 +427,7 @@
 <script setup>
 import { ref, computed, onMounted } from "vue";
 import { showToast } from "../utils/sharedState";
+import { apiFetch } from "../utils/apiFetch";
 
 const props = defineProps(["token"]);
 const emit = defineEmits(["update-count"]);
@@ -480,7 +481,7 @@ const closeAllModals = () => {
 
 const fetchStaff = async () => {
   try {
-    const res = await fetch("/api/admin/users", {
+    const res = await apiFetch("/api/admin/users", {
       headers: { Authorization: `Bearer ${props.token}` },
     });
     if (res.ok) {
@@ -512,7 +513,7 @@ const createUser = async () => {
       newUser.value.is_restricted ? newUser.value.allowed_containers : ".*",
     );
 
-    const res = await fetch("/api/admin/users", {
+    const res = await apiFetch("/api/admin/users", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${props.token}`,
@@ -553,7 +554,7 @@ const toggleUserStatus = async (user) => {
     const formData = new FormData();
     formData.append("is_active", !user.is_active ? "true" : "false");
 
-    const res = await fetch(`/api/admin/users/${user.id}/active`, {
+    const res = await apiFetch(`/api/admin/users/${user.id}/active`, {
       method: "PUT",
       headers: { Authorization: `Bearer ${props.token}` },
       body: formData,
@@ -593,7 +594,7 @@ const confirmResetPassword = async () => {
     const formData = new FormData();
     formData.append("password", resetPassword.value);
 
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/admin/users/${resetTargetUser.value.id}/password`,
       {
         method: "PUT",
@@ -632,7 +633,7 @@ const updatePermissions = async () => {
     );
     formData.append("allowed_containers", editingUser.value.allowed_containers);
 
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/admin/users/${editingUser.value.id}/permissions`,
       {
         method: "PUT",
@@ -658,7 +659,7 @@ const openDeleteConfirm = (user) => {
 const confirmDelete = async () => {
   if (!userToDelete.value) return;
   try {
-    const res = await fetch(`/api/admin/users/${userToDelete.value.id}`, {
+    const res = await apiFetch(`/api/admin/users/${userToDelete.value.id}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${props.token}` },
     });
@@ -1165,11 +1166,11 @@ onMounted(fetchStaff);
 .tag {
   font-family: "JetBrains Mono", monospace;
   font-size: 0.7rem;
-  background: rgba(99, 102, 241, 0.1);
+  background: var(--accent-soft);
   color: var(--accent);
   padding: 0.15rem 0.4rem;
   border-radius: 6px;
-  border: 1px solid rgba(99, 102, 241, 0.2);
+  border: 1px solid rgba(var(--accent-rgb), 0.2);
   min-width: 80px;
   text-align: center;
 }

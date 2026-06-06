@@ -99,7 +99,7 @@ func getAuthorizedPatterns(userID int) []string {
 	var pattern string
 	err := db.DB.QueryRow("SELECT is_restricted_access, allowed_containers FROM users WHERE id = ?", userID).Scan(&isRestricted, &pattern)
 	if err != nil {
-		return []string{".*"}
+		return []string{"^$"}
 	}
 
 	if !isRestricted {
@@ -147,6 +147,9 @@ func getAuthorizedPatterns(userID int) []string {
 
 func main() {
 	AuthDisabled = os.Getenv("DISABLE_AUTH") == "true" || os.Getenv("NO_AUTH") == "true"
+	initSecretKey()
+	initClientAccess()
+	initWSUpgrader()
 
 	getEnvBool := func(key string, defaultVal bool) bool {
 		val := os.Getenv(key)
@@ -181,7 +184,24 @@ func main() {
 	e := echo.New()
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
-	e.Use(middleware.CORS())
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOriginFunc: func(origin string) (bool, error) {
+			return corsOriginAllowed(origin), nil
+		},
+		AllowMethods: []string{
+			http.MethodGet,
+			http.MethodPost,
+			http.MethodPut,
+			http.MethodDelete,
+			http.MethodOptions,
+		},
+		AllowHeaders: []string{
+			echo.HeaderAuthorization,
+			echo.HeaderContentType,
+			headerDockLogClient,
+		},
+	}))
+	e.Use(clientAccessMiddleware())
 
 	// Docker Client
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
@@ -194,6 +214,11 @@ func main() {
 
 	// Auth Endpoints
 	e.POST("/api/token", func(c echo.Context) error {
+		ip := c.RealIP()
+		if loginRateLimit.isLimited(ip, 10, 15*time.Minute) {
+			return c.JSON(http.StatusTooManyRequests, map[string]string{"error": "Too many login attempts. Try again later."})
+		}
+
 		username := c.FormValue("username")
 		password := c.FormValue("password")
 
@@ -206,8 +231,11 @@ func main() {
 			&id, &hashedPassword, &isAdmin, &passwordChanged, &canStart, &canStop, &canRestart, &canDelete, &isRestricted, &allowedContainers, &isActive, &passwordVersion,
 		)
 		if err != nil || bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password)) != nil {
+			loginRateLimit.recordFailure(ip)
 			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid credentials"})
 		}
+
+		loginRateLimit.clear(ip)
 
 		if !isActive {
 			return c.JSON(http.StatusForbidden, map[string]string{"error": "Account deactivated. Please contact administrator."})
@@ -252,6 +280,7 @@ func main() {
 			"allow_restart": CanRestart,
 			"allow_delete":  CanDelete,
 			"allow_shell":   AllowShell,
+			"client_access": clientAccessConfig(),
 		})
 	})
 
@@ -298,26 +327,27 @@ func main() {
 			token := c.Get("user").(*jwt.Token)
 			claims := token.Claims.(*UserClaims)
 
-			var changed, active bool
-			var dbPwdVersion int
-			err := db.DB.QueryRow("SELECT password_changed, is_active, COALESCE(password_version, 1) FROM users WHERE id = ?", claims.ID).Scan(&changed, &active, &dbPwdVersion)
+			var changed bool
+			if err := refreshClaimsFromDB(claims); err != nil {
+				switch err.Error() {
+				case "account deactivated":
+					return c.JSON(http.StatusForbidden, map[string]string{
+						"error": "Account deactivated. Please contact administrator.",
+						"code":  "ACCOUNT_DEACTIVATED",
+					})
+				case "session invalidated":
+					return c.JSON(http.StatusUnauthorized, map[string]string{
+						"error": "Session invalidated. Password was changed. Please re-login.",
+						"code":  "SESSION_INVALIDATED",
+					})
+				default:
+					return c.JSON(http.StatusUnauthorized, map[string]string{"error": "User verification failed"})
+				}
+			}
+
+			err := db.DB.QueryRow("SELECT password_changed FROM users WHERE id = ?", claims.ID).Scan(&changed)
 			if err != nil {
 				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "User verification failed"})
-			}
-
-			if !active {
-				return c.JSON(http.StatusForbidden, map[string]string{
-					"error": "Account deactivated. Please contact administrator.",
-					"code":  "ACCOUNT_DEACTIVATED",
-				})
-			}
-
-			// Session invalidation: reject tokens issued before the latest password change
-			if claims.PasswordVersion != dbPwdVersion {
-				return c.JSON(http.StatusUnauthorized, map[string]string{
-					"error": "Session invalidated. Password was changed. Please re-login.",
-					"code":  "SESSION_INVALIDATED",
-				})
 			}
 
 			// Allow profile and password-change endpoints to proceed after active-state validation.
@@ -1020,8 +1050,25 @@ func main() {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "Password too short"})
 		}
 
+		var hashedPassword string
+		var passwordChanged bool
+		err := db.DB.QueryRow("SELECT password, password_changed FROM users WHERE id = ?", user.ID).Scan(&hashedPassword, &passwordChanged)
+		if err != nil {
+			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "User not found"})
+		}
+
+		if passwordChanged {
+			currentPassword := c.FormValue("current_password")
+			if currentPassword == "" {
+				return c.JSON(http.StatusBadRequest, map[string]string{"error": "Current password is required"})
+			}
+			if bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(currentPassword)) != nil {
+				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Current password is incorrect"})
+			}
+		}
+
 		h, _ := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
-		_, err := db.DB.Exec("UPDATE users SET password = ?, password_changed = 1, password_version = COALESCE(password_version, 1) + 1 WHERE id = ?", string(h), user.ID)
+		_, err = db.DB.Exec("UPDATE users SET password = ?, password_changed = 1, password_version = COALESCE(password_version, 1) + 1 WHERE id = ?", string(h), user.ID)
 		if err != nil {
 			log.Printf("Error updating password for user %d: %v", user.ID, err)
 			return err
@@ -1054,9 +1101,12 @@ func main() {
 		return func(c echo.Context) error {
 			token := c.Get("user").(*jwt.Token)
 			user := token.Claims.(*UserClaims)
-			if !user.IsAdmin {
+			var isAdmin bool
+			err := db.DB.QueryRow("SELECT is_admin FROM users WHERE id = ? AND is_active = 1", user.ID).Scan(&isAdmin)
+			if err != nil || !isAdmin {
 				return c.JSON(http.StatusForbidden, map[string]string{"error": "Admin access required"})
 			}
+			user.IsAdmin = isAdmin
 			return next(c)
 		}
 	})
@@ -1230,19 +1280,13 @@ func main() {
 
 	e.GET("/ws/system-stats", func(c echo.Context) error {
 		if !AuthDisabled {
-			tokenStr := c.QueryParam("token")
-			if tokenStr == "" {
-				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Missing token"})
-			}
-			token, err := jwt.ParseWithClaims(tokenStr, &UserClaims{}, func(token *jwt.Token) (interface{}, error) {
-				return SECRET_KEY, nil
-			})
-			if err != nil || !token.Valid {
-				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid token"})
+			_, err := authenticateWS(c)
+			if err != nil {
+				return wsAuthError(c, err)
 			}
 		}
 
-		ws, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
+		ws, err := upgradeAuthenticatedWS(c)
 		if err != nil {
 			return err
 		}
@@ -1270,29 +1314,12 @@ func main() {
 	})
 
 	e.GET("/ws/events", func(c echo.Context) error {
-		tokenStr := c.QueryParam("token")
-
-		var userClaims *UserClaims
-		if AuthDisabled {
-			userClaims = &UserClaims{
-				IsAdmin: true,
-			}
-		} else {
-			if tokenStr == "" {
-				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Authentication token required"})
-			}
-
-			token, err := jwt.ParseWithClaims(tokenStr, &UserClaims{}, func(token *jwt.Token) (interface{}, error) {
-				return SECRET_KEY, nil
-			})
-
-			if err != nil || !token.Valid {
-				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid token"})
-			}
-			userClaims = token.Claims.(*UserClaims)
+		userClaims, err := authenticateWS(c)
+		if err != nil {
+			return wsAuthError(c, err)
 		}
 
-		ws, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
+		ws, err := upgradeAuthenticatedWS(c)
 		if err != nil {
 			return err
 		}
@@ -1338,26 +1365,10 @@ func main() {
 
 	e.GET("/ws/logs/:id", func(c echo.Context) error {
 		id := c.Param("id")
-		tokenStr := c.QueryParam("token")
 
-		var userClaims *UserClaims
-		if AuthDisabled {
-			userClaims = &UserClaims{
-				IsAdmin: true,
-			}
-		} else {
-			if tokenStr == "" {
-				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Authentication token required"})
-			}
-
-			token, err := jwt.ParseWithClaims(tokenStr, &UserClaims{}, func(token *jwt.Token) (interface{}, error) {
-				return SECRET_KEY, nil
-			})
-
-			if err != nil || !token.Valid {
-				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid token"})
-			}
-			userClaims = token.Claims.(*UserClaims)
+		userClaims, err := authenticateWS(c)
+		if err != nil {
+			return wsAuthError(c, err)
 		}
 
 		// Regex Access Check
@@ -1381,7 +1392,7 @@ func main() {
 			}
 		}
 
-		ws, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
+		ws, err := upgradeAuthenticatedWS(c)
 		if err != nil {
 			return err
 		}
@@ -1425,29 +1436,10 @@ func main() {
 
 	e.GET("/ws/shell/:id", func(c echo.Context) error {
 		id := c.Param("id")
-		tokenStr := c.QueryParam("token")
 
-		var userClaims *UserClaims
-		if AuthDisabled {
-			userClaims = &UserClaims{
-				ID:                 1,
-				Username:           "admin",
-				IsAdmin:            true,
-				IsRestrictedAccess: false,
-			}
-		} else {
-			if tokenStr == "" {
-				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Authentication token required"})
-			}
-
-			token, err := jwt.ParseWithClaims(tokenStr, &UserClaims{}, func(token *jwt.Token) (interface{}, error) {
-				return SECRET_KEY, nil
-			})
-
-			if err != nil || !token.Valid {
-				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid token"})
-			}
-			userClaims = token.Claims.(*UserClaims)
+		userClaims, err := authenticateWS(c)
+		if err != nil {
+			return wsAuthError(c, err)
 		}
 
 		if !AllowShell {
@@ -1479,7 +1471,16 @@ func main() {
 			}
 		}
 
-		ws, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
+		shellCmd := c.QueryParam("shell")
+		if shellCmd == "" {
+			shellCmd = "/bin/sh"
+		}
+		allowedShells := map[string]bool{"/bin/sh": true, "/bin/bash": true, "/bin/ash": true}
+		if !allowedShells[shellCmd] {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid shell"})
+		}
+
+		ws, err := upgradeAuthenticatedWS(c)
 		if err != nil {
 			return err
 		}
@@ -1488,12 +1489,6 @@ func main() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		shellCmd := c.QueryParam("shell")
-		if shellCmd == "" {
-			shellCmd = "/bin/sh"
-		}
-
-		// Create exec config
 		execConfig := client.ExecCreateOptions{
 			AttachStdin:  true,
 			AttachStdout: true,
@@ -1759,6 +1754,6 @@ func seedAdmin() {
 			log.Fatalf("Failed to hash default admin password: %v", err)
 		}
 		db.DB.Exec("INSERT INTO users (username, password, is_admin, password_changed) VALUES (?, ?, ?, ?)", "admin", string(h), true, false)
-		log.Println("Admin user created: admin / admin123")
+		log.Println("Default admin account created (username: admin). Change the password on first login.")
 	}
 }

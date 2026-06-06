@@ -53,3 +53,24 @@ Administrators can view these logs directly in the **Admin Panel**.
 1.  **Reverse Proxy**: Always run DockLog behind a reverse proxy (Nginx, Traefik, Caddy) to handle SSL/TLS termination.
 2.  **Docker Socket**: Be careful with mounting the Docker socket. Only expose DockLog to trusted networks or use a VPN.
 3.  **Password Policy**: DockLog enforces a password change on the first login. Encourage users to use strong, unique passwords.
+
+## 🌐 Client Access Control
+
+DockLog rejects direct `/api` and `/ws` calls from arbitrary browser origins.
+
+| Client | Requirements |
+| --- | --- |
+| Vue web UI (browser) | `X-DockLog-Client: web` + Origin/Referer matching the server or `ALLOWED_ORIGINS` |
+| Native mobile app (Flutter, Android/iOS) | No browser Origin; JWT authentication after login |
+| WebSocket (Vue UI in browser) | Valid Origin (browsers cannot set custom WS headers) |
+| WebSocket (native mobile app) | No Origin + JWT subprotocol |
+
+The Flutter app (`com.docklog.app`) is **native mobile only** — it is not a web client. Do not use Flutter Web; use the bundled Vue dashboard in the browser.
+
+Environment variables:
+
+- `CLIENT_ACCESS=strict` — default; set `off` only for local debugging
+- `ALLOWED_ORIGINS` — comma-separated extra web origins
+- `ENV=production` — disables localhost origin bypass
+
+Native mobile apps connect with JWT after login (no browser Origin). Mobile setup docs belong in your private Flutter repo.

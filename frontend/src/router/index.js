@@ -1,16 +1,14 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import Dashboard from '../views/Dashboard.vue';
-import Admin from '../views/Admin.vue';
-import Login from '../views/Login.vue';
 import { secureStorage, parseJwt } from '../utils/storage';
 import { sharedState } from '../utils/sharedState';
+import { apiFetch } from '../utils/apiFetch';
 
 const routes = [
   { path: '/', redirect: '/dashboard' },
   { 
     path: '/dashboard', 
     name: 'Dashboard', 
-    component: Dashboard,
+    component: () => import('../views/Dashboard.vue'),
     meta: { requiresAuth: true, layout: 'main', title: 'Dashboard' }
   },
   { 
@@ -34,7 +32,7 @@ const routes = [
   { 
     path: '/admin', 
     name: 'Admin', 
-    component: Admin,
+    component: () => import('../views/Admin.vue'),
     meta: { requiresAuth: true, requiresAdmin: true, layout: 'main', title: 'Admin Control Center' }
   },
   { 
@@ -52,7 +50,7 @@ const routes = [
   { 
     path: '/login', 
     name: 'Login', 
-    component: Login,
+    component: () => import('../views/Login.vue'),
     meta: { title: 'Sign In' }
   },
   {
@@ -71,7 +69,7 @@ const router = createRouter({
 router.beforeEach(async (to, from, next) => {
   if (!sharedState.configLoaded) {
     try {
-      const res = await fetch('/api/config');
+      const res = await apiFetch('/api/config');
       if (res.ok) {
         const data = await res.json();
         sharedState.isAuthDisabled = data.auth_disabled === true;

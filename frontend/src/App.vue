@@ -16,15 +16,20 @@
 </template>
 
 <script setup>
-import { onMounted } from 'vue';
+import { onMounted, onUnmounted } from 'vue';
 import { useRoute } from 'vue-router';
 import MainLayout from './components/MainLayout.vue';
-import { sharedState } from './utils/sharedState';
+import { sharedState, initThemeListener } from './utils/sharedState';
 
 const route = useRoute();
+let removeThemeListener = null;
 
 onMounted(() => {
-  document.documentElement.setAttribute('data-theme', sharedState.theme);
+  removeThemeListener = initThemeListener();
+});
+
+onUnmounted(() => {
+  removeThemeListener?.();
 });
 </script>
 

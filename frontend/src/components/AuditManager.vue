@@ -250,6 +250,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from "vue";
+import { apiFetch } from "../utils/apiFetch";
 
 const props = defineProps(["token"]);
 const emit = defineEmits(["update-count"]);
@@ -304,7 +305,7 @@ const fetchAuditLogs = async () => {
       const to = dateRange.value.to.replace("T", " ") + ":59";
       url += `?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
     }
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       headers: { Authorization: `Bearer ${props.token}` },
     });
     if (res.ok) {

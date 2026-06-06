@@ -68,6 +68,16 @@
         <div class="card-body">
           <form @submit.prevent="handlePasswordUpdate" class="settings-form">
             <div class="input-group">
+              <label>Current Password</label>
+              <input
+                type="password"
+                v-model="currentPassword"
+                placeholder="Enter current password"
+                class="premium-input"
+                required
+              />
+            </div>
+            <div class="input-group">
               <label>New Password</label>
               <input
                 type="password"
@@ -118,48 +128,25 @@
           <h3>System Preferences</h3>
         </div>
         <div class="card-body">
-          <div class="pref-row">
+          <div class="pref-row theme-pref-row">
             <div class="pref-info">
-              <h4>Dark Mode</h4>
-              <p class="text-mute">Toggle the high-contrast midnight theme</p>
+              <h4>Appearance</h4>
+              <p class="text-mute">{{ themeDescription }}</p>
             </div>
-            <button
-              :class="['theme-toggle-btn', sharedState.theme]"
-              @click="toggleTheme"
-            >
-              <div class="toggle-track">
-                <div class="toggle-thumb">
-                  <svg
-                    v-if="sharedState.theme === 'dark'"
-                    viewBox="0 0 24 24"
-                    width="12"
-                    height="12"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="3"
-                  >
-                    <path
-                      d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"
-                    ></path>
-                  </svg>
-                  <svg
-                    v-else
-                    viewBox="0 0 24 24"
-                    width="12"
-                    height="12"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="3"
-                  >
-                    <circle cx="12" cy="12" r="5"></circle>
-                    <line x1="12" y1="1" x2="12" y2="3"></line>
-                    <line x1="12" y1="21" x2="12" y2="23"></line>
-                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-                  </svg>
-                </div>
-              </div>
-            </button>
+            <div class="theme-options">
+              <button
+                v-for="option in themeOptions"
+                :key="option.value"
+                type="button"
+                :class="[
+                  'theme-option',
+                  { active: sharedState.themePreference === option.value },
+                ]"
+                @click="applyTheme(option.value)"
+              >
+                {{ option.label }}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -168,12 +155,27 @@
 </template>
 
 <script setup>
-import { ref } from "vue";
-import { sharedState, showToast } from "../utils/sharedState";
+import { ref, computed } from "vue";
+import { sharedState, showToast, applyTheme } from "../utils/sharedState";
 import { secureStorage } from "../utils/storage";
+import { apiFetch } from "../utils/apiFetch";
+
+const themeOptions = [
+  { value: "auto", label: "Auto" },
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+];
+
+const themeDescription = computed(() => {
+  if (sharedState.themePreference === "auto") {
+    return `Auto mode — currently using ${sharedState.theme} (matches your system)`;
+  }
+  return `Using ${sharedState.themePreference} mode`;
+});
 
 const newPassword = ref("");
 const confirmPassword = ref("");
+const currentPassword = ref("");
 const loading = ref(false);
 const error = ref("");
 
@@ -186,6 +188,10 @@ const handlePasswordUpdate = async () => {
     error.value = "Password must be at least 6 characters";
     return;
   }
+  if (!currentPassword.value) {
+    error.value = "Current password is required";
+    return;
+  }
 
   loading.value = true;
   error.value = "";
@@ -194,8 +200,9 @@ const handlePasswordUpdate = async () => {
     const token = secureStorage.getItem("token");
     const formData = new FormData();
     formData.append("password", newPassword.value);
+    formData.append("current_password", currentPassword.value);
 
-    const res = await fetch("/api/user/change-password", {
+    const res = await apiFetch("/api/user/change-password", {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
       body: formData,
@@ -205,6 +212,7 @@ const handlePasswordUpdate = async () => {
       showToast("Success", "Password updated successfully", "success");
       newPassword.value = "";
       confirmPassword.value = "";
+      currentPassword.value = "";
     } else {
       const data = await res.json();
       error.value = data.error || "Failed to update password";
@@ -214,12 +222,6 @@ const handlePasswordUpdate = async () => {
   } finally {
     loading.value = false;
   }
-};
-
-const toggleTheme = () => {
-  sharedState.theme = sharedState.theme === "dark" ? "light" : "dark";
-  secureStorage.setItem("theme", sharedState.theme);
-  document.documentElement.setAttribute("data-theme", sharedState.theme);
 };
 </script>
 
@@ -243,11 +245,13 @@ const toggleTheme = () => {
 }
 
 .settings-card {
-  padding: 2.5rem;
-  border-radius: 32px;
+  padding: 1.75rem;
+  border-radius: var(--radius-xl);
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: 1.5rem;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
 }
 
 .card-header {
@@ -331,7 +335,7 @@ const toggleTheme = () => {
 
 .premium-input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.12);
 }
 
 .premium-btn {
@@ -351,7 +355,7 @@ const toggleTheme = () => {
 .premium-btn.primary {
   background: var(--accent);
   color: #fff;
-  box-shadow: 0 8px 16px rgba(99, 102, 241, 0.2);
+  box-shadow: 0 8px 16px rgba(var(--accent-rgb), 0.2);
 }
 
 .premium-btn:hover:not(:disabled) {
@@ -382,42 +386,43 @@ const toggleTheme = () => {
   border: 1px solid var(--border);
 }
 
-.theme-toggle-btn {
-  width: 56px;
-  height: 30px;
-  border-radius: 30px;
-  background: var(--border);
-  position: relative;
-  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+.theme-pref-row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 1.25rem;
 }
 
-.theme-toggle-btn.dark {
+.theme-options {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.35rem;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.theme-option {
+  flex: 1;
+  padding: 0.65rem 0.85rem;
+  border-radius: calc(var(--radius-md) - 2px);
+  border: none;
+  background: transparent;
+  color: var(--text-mute);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.theme-option:hover {
+  color: var(--text-main);
+  background: var(--bg-subtle);
+}
+
+.theme-option.active {
   background: var(--accent);
-}
-
-.toggle-track {
-  position: absolute;
-  inset: 3px;
-  display: flex;
-  align-items: center;
-}
-
-.toggle-thumb {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--accent);
-  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-}
-
-.theme-toggle-btn.dark .toggle-thumb {
-  transform: translateX(26px);
-  color: var(--accent);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.28);
 }
 
 @media (max-width: 768px) {
@@ -436,6 +441,10 @@ const toggleTheme = () => {
     flex-direction: row;
     align-items: center;
     gap: 1rem;
+  }
+  .theme-pref-row {
+    flex-direction: column;
+    align-items: stretch;
   }
   .pref-info h4 {
     font-size: 0.9rem;

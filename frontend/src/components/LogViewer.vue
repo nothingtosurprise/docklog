@@ -219,7 +219,7 @@
           Beginning of history reached ({{ totalLogs }} logs)
         </div>
 
-        <div v-for="(log, i) in displayLogs" :key="i" class="log-line">
+        <div v-for="(log, i) in displayLogs" :key="logLineKey(log, i)" class="log-line">
           <span class="line-num">{{ i + 1 }}</span>
           <span class="line-text" v-html="formatLog(log)"></span>
         </div>
@@ -253,6 +253,8 @@
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick, watch, computed } from "vue";
 import { secureStorage } from "../utils/storage";
+import { createAuthenticatedWebSocket } from "../utils/wsAuth";
+import { apiFetch } from "../utils/apiFetch";
 
 const props = defineProps({
   container: Object,
@@ -277,6 +279,17 @@ let lastFetchedUntil = null;
 let socket = null;
 let statsController = null;
 let observer = null;
+let reconnectTimer = null;
+let historyFetchId = 0;
+let viewerMounted = false;
+
+const escapeHtml = (str) =>
+  str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 
 const formatLog = (text) => {
   // Strip Docker timestamp if present (it's always at the start)
@@ -285,8 +298,7 @@ const formatLog = (text) => {
     "",
   );
 
-  let formatted = cleanText
-    .replace(/\033\[[0-9;]*m/g, "")
+  let formatted = escapeHtml(cleanText.replace(/\033\[[0-9;]*m/g, ""))
     .replace(/(ERROR|ERR|Fail|Failed)/gi, '<span class="text-error">$1</span>')
     .replace(/(WARN|Warning)/gi, '<span class="text-warning">$1</span>')
     .replace(/(INFO|OK|Success)/gi, '<span class="text-success">$1</span>');
@@ -304,13 +316,23 @@ const formatLog = (text) => {
   return formatted;
 };
 
+const MAX_RENDERED_LOGS = 2000;
+
 const displayLogs = computed(() => {
-  if (!logSearchQuery.value || logSearchQuery.value.length < 2)
-    return logs.value;
-  return logs.value.filter((l) =>
-    l.toLowerCase().includes(logSearchQuery.value.toLowerCase()),
-  );
+  let source = logs.value;
+  if (logSearchQuery.value && logSearchQuery.value.length >= 2) {
+    source = logs.value.filter((l) =>
+      l.toLowerCase().includes(logSearchQuery.value.toLowerCase()),
+    );
+  }
+  if (source.length > MAX_RENDERED_LOGS) {
+    return source.slice(-MAX_RENDERED_LOGS);
+  }
+  return source;
 });
+
+const logLineKey = (log, index) =>
+  `${index}-${log.length}-${log.slice(0, 24)}-${log.slice(-12)}`;
 
 const scrollToBottom = () => {
   if (logContainer.value) {
@@ -341,19 +363,22 @@ const fetchHistoricalLogs = async () => {
 
   if (until === lastFetchedUntil) return;
 
+  const fetchId = ++historyFetchId;
   console.log("[LogViewer] Fetching history until:", until);
   lastFetchedUntil = until;
   isLoadingHistory.value = true;
 
   try {
     const token = secureStorage.getItem("token");
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/containers/${props.container.id}/logs?tail=100&until=${encodeURIComponent(until)}`,
       {
         headers: { Authorization: `Bearer ${token}` },
       },
     );
     if (res.ok) {
+      if (fetchId !== historyFetchId) return;
+
       const newLogs = await res.json();
       const logsCount = Array.isArray(newLogs) ? newLogs.length : 0;
       console.log(`[LogViewer] Received ${logsCount} lines from backend`);
@@ -404,7 +429,9 @@ const fetchHistoricalLogs = async () => {
   } catch (err) {
     console.error("Failed to fetch historical logs:", err);
   } finally {
-    isLoadingHistory.value = false;
+    if (fetchId === historyFetchId) {
+      isLoadingHistory.value = false;
+    }
   }
 };
 
@@ -479,7 +506,7 @@ const downloadLogs = (format) => {
 const downloadFullLogs = async () => {
   try {
     const token = secureStorage.getItem("token");
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/containers/${props.container.id}/logs/download`,
       {
         headers: { Authorization: `Bearer ${token}` },
@@ -503,7 +530,7 @@ const fetchStats = async () => {
   statsController = new AbortController();
   try {
     const token = secureStorage.getItem("token");
-    const response = await fetch(
+    const response = await apiFetch(
       `/api/containers/${props.container.id}/stats`,
       {
         headers: { Authorization: `Bearer ${token}` },
@@ -567,7 +594,7 @@ const fetchStats = async () => {
 const fetchLogCount = async () => {
   try {
     const token = secureStorage.getItem("token");
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/containers/${props.container.id}/logs/count`,
       {
         headers: { Authorization: `Bearer ${token}` },
@@ -583,12 +610,15 @@ const fetchLogCount = async () => {
 };
 
 const connect = () => {
-  if (socket) socket.close();
-  const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-  const token = secureStorage.getItem("token");
-  socket = new WebSocket(
-    `${protocol}//${location.host}/ws/logs/${props.container.id}?token=${token}`,
-  );
+  if (socket) {
+    socket.onclose = null;
+    socket.close();
+  }
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  socket = createAuthenticatedWebSocket(`/ws/logs/${props.container.id}`);
   socket.onmessage = (e) => {
     logs.value.push(e.data);
     // Limit buffer to 5000 lines, only prune if auto-scrolling to preserve history exploration
@@ -598,27 +628,39 @@ const connect = () => {
     if (autoScroll.value) nextTick(scrollToBottom);
   };
   socket.onclose = () => {
-    // Only reconnect if the container is still the same and component is mounted
-    setTimeout(() => {
-      if (props.container.id) connect();
+    socket = null;
+    if (!viewerMounted) return;
+    reconnectTimer = setTimeout(() => {
+      if (viewerMounted && props.container.id) connect();
     }, 3000);
   };
 };
 
 onMounted(() => {
+  viewerMounted = true;
   connect();
   fetchStats();
   fetchLogCount();
   nextTick(setupObserver);
 });
 onUnmounted(() => {
-  if (socket) socket.close();
+  viewerMounted = false;
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  if (socket) {
+    socket.onclose = null;
+    socket.close();
+  }
   if (statsController) statsController.abort();
   if (observer) observer.disconnect();
 });
 watch(
   () => props.container.id,
   () => {
+    historyFetchId++;
+    lastFetchedUntil = null;
     logs.value = [];
     totalLogs.value = 0;
     connect();
@@ -823,8 +865,8 @@ watch(
   align-items: center;
   gap: 0.5rem;
   padding: 0.6rem 1.2rem;
-  background: var(--primary-light);
-  border: 1px solid var(--primary);
+  background: var(--accent-soft);
+  border: 1px solid rgba(var(--accent-rgb), 0.35);
   border-radius: 8px;
   color: var(--text-main);
   font-size: 0.8rem;
@@ -833,7 +875,7 @@ watch(
 }
 
 .history-btn-manual:hover {
-  background: var(--primary);
+  background: var(--accent);
   color: white;
   transform: translateY(-2px);
 }
@@ -859,7 +901,7 @@ watch(
   width: 14px;
   height: 14px;
   border: 2px solid rgba(255, 255, 255, 0.1);
-  border-top-color: var(--primary);
+  border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }

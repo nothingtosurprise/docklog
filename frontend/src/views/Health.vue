@@ -191,6 +191,7 @@ import {
 } from "chart.js";
 import { secureStorage } from "../utils/storage";
 import { sharedState } from "../utils/sharedState";
+import { apiFetch } from "../utils/apiFetch";
 
 ChartJS.register(
   Title,
@@ -366,13 +367,20 @@ const makeChartOptions = (unit) => ({
   },
 });
 
-const cpuChartOptions = makeChartOptions("%");
-const memChartOptions = makeChartOptions("GB");
+const cpuChartOptions = computed(() => makeChartOptions("%"));
+const memChartOptions = computed(() => makeChartOptions("GB"));
+
+watch(
+  () => sharedState.theme,
+  () => {
+    updateCharts();
+  },
+);
 
 const fetchData = async () => {
   try {
     const token = secureStorage.getItem("token");
-    const res = await fetch("/api/system/history", {
+    const res = await apiFetch("/api/system/history", {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (res.ok) {
@@ -442,8 +450,8 @@ const updateCharts = () => {
     datasets: [{
       label: "CPU Load",
       data: timeline.map(t => t.cpu),
-      borderColor: "#6366f1",
-      backgroundColor: "rgba(99, 102, 241, 0.1)",
+      borderColor: "#0891b2",
+      backgroundColor: "rgba(8, 145, 178, 0.12)",
       fill: true,
       borderWidth: 3,
       spanGaps: true // Connect gaps if any, or keep false to show missing data
@@ -536,7 +544,7 @@ onMounted(() => {
 .range-pill.active {
   background: var(--accent);
   color: #fff;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.28);
 }
 
 .range-pill.is-partial {

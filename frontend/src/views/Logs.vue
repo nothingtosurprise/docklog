@@ -273,18 +273,13 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { sharedState, showToast, fetchCurrentUser } from "../utils/sharedState";
+import { sharedState, showToast, fetchCurrentUser, toggleTheme } from "../utils/sharedState";
 import { secureStorage } from "../utils/storage";
+import { apiFetch } from "../utils/apiFetch";
 import LogViewer from "../components/LogViewer.vue";
 
 const route = useRoute();
 const router = useRouter();
-
-const toggleTheme = () => {
-  sharedState.theme = sharedState.theme === "dark" ? "light" : "dark";
-  secureStorage.setItem("theme", sharedState.theme);
-  document.documentElement.setAttribute("data-theme", sharedState.theme);
-};
 
 const formatBytes = (bytes) => {
   if (!bytes || bytes === 0) return "0B";
@@ -323,7 +318,7 @@ const stopLiveStats = () => {
 const fetchStatsNow = async (id) => {
   try {
     const token = secureStorage.getItem("token");
-    const res = await fetch(`/api/containers/${id}/stats-now`, {
+    const res = await apiFetch(`/api/containers/${id}/stats-now`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (res.ok) {
@@ -399,7 +394,7 @@ const gridClass = computed(() =>
 const fetchContainers = async () => {
   try {
     const token = secureStorage.getItem("token");
-    const res = await fetch("/api/containers", {
+    const res = await apiFetch("/api/containers", {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (res.ok) {
@@ -512,11 +507,12 @@ watch(() => route.query, syncStateFromUrl);
 }
 
 .logo-img-sidebar {
-  width: 28px;
-  height: 28px;
+  width: 36px;
+  height: 36px;
   object-fit: contain;
-  border: 1px solid #2b4a64;
-  border-radius: 20%;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: none;
 }
 
 .logo-text {
@@ -581,7 +577,7 @@ watch(() => route.query, syncStateFromUrl);
 .resource-card:hover {
   border-color: var(--accent);
   transform: translateX(4px);
-  background: var(--bg-card-hover);
+  background: var(--card-hover);
 }
 
 /* Stats Peek Styling */
@@ -698,10 +694,10 @@ watch(() => route.query, syncStateFromUrl);
 }
 
 .active-toggle {
-  background: #7c3aed !important;
+  background: var(--accent) !important;
   color: white !important;
-  border-color: #7c3aed !important;
-  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.4);
+  border-color: var(--accent) !important;
+  box-shadow: 0 4px 14px rgba(var(--accent-rgb), 0.35);
 }
 
 .sidebar-collapsed .resources-sidebar {
@@ -897,7 +893,7 @@ watch(() => route.query, syncStateFromUrl);
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+    box-shadow: 0 0 20px rgba(var(--accent-rgb), 0.35);
   }
 
   .logo-text-premium {
@@ -948,9 +944,9 @@ watch(() => route.query, syncStateFromUrl);
   }
 
   .back-nav-link-mobile:hover {
-    background: rgba(99, 102, 241, 0.1);
+    background: var(--accent-soft);
     color: var(--accent);
-    border-color: rgba(99, 102, 241, 0.3);
+    border-color: rgba(var(--accent-rgb), 0.3);
   }
 
   .sidebar-header {

@@ -46,3 +46,8 @@ ehthumbs.db
 Thumbs.db
 
 .env
+
+# Local / private — not for the public repository
+.env.example
+docs/FLUTTER.md
+docs/examples/
