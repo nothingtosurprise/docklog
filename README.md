@@ -201,10 +201,11 @@ DockLog is built for the entire team.
 | Variable       | Description          | Default                       |
 | ------------- | -------------------- | ----------------------------- |
 | `DISABLE_AUTH`| Disable authentication (runs in No-Auth mode using `:memory:`) | `false` |
-| `ALLOW_START` | Enable starting containers in No-Auth mode   | `true`                        |
-| `ALLOW_STOP`  | Enable stopping containers in No-Auth mode   | `true`                        |
-| `ALLOW_RESTART`| Enable restarting containers in No-Auth mode | `true`                        |
-| `ALLOW_DELETE` | Enable deleting containers in No-Auth mode   | `true`                        |
+| `ALLOW_START` | Enable starting containers in No-Auth mode   | `false`                        |
+| `ALLOW_STOP`  | Enable stopping containers in No-Auth mode   | `false`                        |
+| `ALLOW_RESTART`| Enable restarting containers in No-Auth mode | `false`                        |
+| `ALLOW_DELETE` | Enable deleting containers in No-Auth mode   | `false`                        |
+| `ALLOW_SHELL`  | Enable interactive container shell sessions (over WebSockets) | `false`                        |
 | `PORT`        | Application port     | `8000`                        |
 | `SECRET_KEY`  | JWT signing secret   | `secret-key-change-this`      |
 | `DB_PATH`     | SQLite database path | `docklog.db`                  |

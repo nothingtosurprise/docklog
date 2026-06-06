@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -8,12 +9,11 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
-	"time"
-	"bytes"
-	"runtime"
 	"sync"
+	"time"
 
 	"docklog/db"
 
@@ -39,6 +39,7 @@ var (
 	CanStop      bool
 	CanRestart   bool
 	CanDelete    bool
+	AllowShell   bool
 )
 
 type Container struct {
@@ -155,10 +156,11 @@ func main() {
 		return val == "true"
 	}
 
-	CanStart = getEnvBool("ALLOW_START", true)
-	CanStop = getEnvBool("ALLOW_STOP", true)
-	CanRestart = getEnvBool("ALLOW_RESTART", true)
-	CanDelete = getEnvBool("ALLOW_DELETE", true)
+	CanStart = getEnvBool("ALLOW_START", false)
+	CanStop = getEnvBool("ALLOW_STOP", false)
+	CanRestart = getEnvBool("ALLOW_RESTART", false)
+	CanDelete = getEnvBool("ALLOW_DELETE", false)
+	AllowShell = getEnvBool("ALLOW_SHELL", false)
 
 	// DB Init
 	dbPath := os.Getenv("DB_PATH")
@@ -249,6 +251,7 @@ func main() {
 			"allow_stop":    CanStop,
 			"allow_restart": CanRestart,
 			"allow_delete":  CanDelete,
+			"allow_shell":   AllowShell,
 		})
 	})
 
@@ -481,7 +484,6 @@ func main() {
 		return c.JSON(http.StatusOK, container)
 	})
 
-
 	r.POST("/containers/:id/action", func(c echo.Context) error {
 		id := c.Param("id")
 		action := c.FormValue("action")
@@ -622,7 +624,7 @@ func main() {
 	r.GET("/containers/:id/logs", func(c echo.Context) error {
 		id := c.Param("id")
 		untilStr := c.QueryParam("until")
-		
+
 		token := c.Get("user").(*jwt.Token)
 		userClaims := token.Claims.(*UserClaims)
 
@@ -707,9 +709,9 @@ func main() {
 					if err != nil {
 						ts, err = time.Parse(time.RFC3339, parts[0])
 					}
-					
+
 					if err == nil {
-						// Be inclusive (!After) to ensure no logs are missed; 
+						// Be inclusive (!After) to ensure no logs are missed;
 						// the frontend will handle deduplication of the boundary log.
 						if !ts.After(untilTime) {
 							filtered = append(filtered, line)
@@ -717,7 +719,7 @@ func main() {
 					}
 				}
 			}
-			
+
 			if len(filtered) > 100 {
 				logs = filtered[len(filtered)-100:]
 			} else {
@@ -851,7 +853,7 @@ func main() {
 			}
 		}
 
-		// To get accurate CPU %, we need two samples. 
+		// To get accurate CPU %, we need two samples.
 		// We'll take a quick 200ms sample to stay responsive.
 		s1, err := cli.ContainerStats(context.Background(), id, client.ContainerStatsOptions{Stream: false})
 		if err != nil {
@@ -885,7 +887,7 @@ func main() {
 				OnlineCPUs  uint32 `json:"online_cpus"`
 			} `json:"cpu_stats"`
 			MemoryStats struct {
-				Usage uint64 `json:"usage"`
+				Usage uint64            `json:"usage"`
 				Stats map[string]uint64 `json:"stats"`
 			} `json:"memory_stats"`
 		}
@@ -895,7 +897,7 @@ func main() {
 
 		cpuDelta := float64(v2.CPUStats.CPUUsage.TotalUsage) - float64(v1.CPUStats.CPUUsage.TotalUsage)
 		systemDelta := float64(v2.CPUStats.SystemUsage) - float64(v1.CPUStats.SystemUsage)
-		
+
 		onlineCPUs := float64(v2.CPUStats.OnlineCPUs)
 		if onlineCPUs == 0 {
 			onlineCPUs = float64(runtime.NumCPU())
@@ -1255,7 +1257,7 @@ func main() {
 				sysStatsMu.RLock()
 				data := latestSystemStats
 				sysStatsMu.RUnlock()
-				
+
 				if data != nil {
 					if err := ws.WriteJSON(data); err != nil {
 						return nil
@@ -1421,6 +1423,144 @@ func main() {
 		return nil
 	})
 
+	e.GET("/ws/shell/:id", func(c echo.Context) error {
+		id := c.Param("id")
+		tokenStr := c.QueryParam("token")
+
+		var userClaims *UserClaims
+		if AuthDisabled {
+			userClaims = &UserClaims{
+				ID:                 1,
+				Username:           "admin",
+				IsAdmin:            true,
+				IsRestrictedAccess: false,
+			}
+		} else {
+			if tokenStr == "" {
+				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Authentication token required"})
+			}
+
+			token, err := jwt.ParseWithClaims(tokenStr, &UserClaims{}, func(token *jwt.Token) (interface{}, error) {
+				return SECRET_KEY, nil
+			})
+
+			if err != nil || !token.Valid {
+				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid token"})
+			}
+			userClaims = token.Claims.(*UserClaims)
+		}
+
+		if !AllowShell {
+			logAudit(userClaims.ID, userClaims.Username, "SHELL_SESSION", id, "Forbidden", "Shell access is disabled on this server")
+			return c.JSON(http.StatusForbidden, map[string]string{"error": "Shell access is disabled on this server."})
+		}
+
+		// Verify container exists and get its name
+		container, err := cli.ContainerInspect(context.Background(), id, client.ContainerInspectOptions{})
+		if err != nil {
+			logAudit(userClaims.ID, userClaims.Username, "SHELL_SESSION", id, "Error", "Container not found: "+err.Error())
+			return c.NoContent(http.StatusNotFound)
+		}
+		containerName := strings.TrimPrefix(container.Container.Name, "/")
+
+		// Regex Access Check
+		if !userClaims.IsAdmin {
+			patterns := getAuthorizedPatterns(userClaims.ID)
+			authorized := false
+			for _, p := range patterns {
+				if matched, _ := regexp.MatchString(p, containerName); matched {
+					authorized = true
+					break
+				}
+			}
+			if !authorized {
+				logAudit(userClaims.ID, userClaims.Username, "SHELL_SESSION", containerName, "Forbidden", "Access Denied: Regex mismatch")
+				return c.JSON(http.StatusForbidden, map[string]string{"error": "Access Denied: You do not have permission to view this resource."})
+			}
+		}
+
+		ws, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
+		if err != nil {
+			return err
+		}
+		defer ws.Close()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		// Create exec config - try /bin/bash first, then fallback to /bin/sh
+		execConfig := client.ExecCreateOptions{
+			AttachStdin:  true,
+			AttachStdout: true,
+			AttachStderr: true,
+			TTY:          true,
+			Cmd:          []string{"/bin/bash"},
+		}
+
+		execResult, err := cli.ExecCreate(ctx, id, execConfig)
+		if err != nil {
+			execConfig.Cmd = []string{"/bin/sh"}
+			execResult, err = cli.ExecCreate(ctx, id, execConfig)
+			if err != nil {
+				logAudit(userClaims.ID, userClaims.Username, "SHELL_SESSION", containerName, "Error", "Failed to create exec instance: "+err.Error())
+				ws.WriteMessage(websocket.TextMessage, []byte("\r\n[DockLog] Failed to create terminal session: "+err.Error()+"\r\n"))
+				return nil
+			}
+		}
+
+		// Attach exec
+		attachResult, err := cli.ExecAttach(ctx, execResult.ID, client.ExecAttachOptions{
+			TTY: true,
+		})
+		if err != nil {
+			logAudit(userClaims.ID, userClaims.Username, "SHELL_SESSION", containerName, "Error", "Failed to attach exec instance: "+err.Error())
+			ws.WriteMessage(websocket.TextMessage, []byte("\r\n[DockLog] Failed to attach to terminal session: "+err.Error()+"\r\n"))
+			return nil
+		}
+		defer attachResult.Close()
+
+		// Log session started in audit logs
+		logAudit(userClaims.ID, userClaims.Username, "SHELL_SESSION", containerName, "Success", "Interactive shell session started")
+
+		errChan := make(chan error, 2)
+		go func() {
+			for {
+				_, msg, err := ws.ReadMessage()
+				if err != nil {
+					errChan <- err
+					return
+				}
+				_, err = attachResult.Conn.Write(msg)
+				if err != nil {
+					errChan <- err
+					return
+				}
+			}
+		}()
+
+		go func() {
+			buf := make([]byte, 4096)
+			for {
+				n, err := attachResult.Reader.Read(buf)
+				if n > 0 {
+					err = ws.WriteMessage(websocket.TextMessage, buf[:n])
+					if err != nil {
+						errChan <- err
+						return
+					}
+				}
+				if err != nil {
+					errChan <- err
+					return
+				}
+			}
+		}()
+
+		<-errChan
+		logAudit(userClaims.ID, userClaims.Username, "SHELL_SESSION", containerName, "Success", "Interactive shell session closed")
+		return nil
+	})
+
 	// Serve Frontend
 	e.Use(middleware.StaticWithConfig(middleware.StaticConfig{
 		Root:   "frontend/dist",
@@ -1486,7 +1626,7 @@ func systemStatsBroadcaster() {
 		if len(cp) > 0 {
 			cpuVal = cp[0]
 		}
-		
+
 		cores, err := cpu.Counts(true)
 		if err != nil || cores == 0 {
 			cores = runtime.NumCPU()
@@ -1500,7 +1640,7 @@ func systemStatsBroadcaster() {
 			"cores":        cores,
 		}
 		sysStatsMu.Unlock()
-		
+
 		time.Sleep(500 * time.Millisecond) // Total cycle ~1s (500ms sample + 500ms sleep)
 	}
 }
@@ -1562,7 +1702,7 @@ func collectStats(cli *client.Client) {
 				OnlineCPUs  uint32 `json:"online_cpus"`
 			} `json:"cpu_stats"`
 			MemoryStats struct {
-				Usage uint64 `json:"usage"`
+				Usage uint64            `json:"usage"`
 				Stats map[string]uint64 `json:"stats"`
 			} `json:"memory_stats"`
 		}
@@ -1578,7 +1718,7 @@ func collectStats(cli *client.Client) {
 		if ok {
 			cpuDelta := float64(s.CPUStats.CPUUsage.TotalUsage) - float64(prev.TotalUsage)
 			systemDelta := float64(s.CPUStats.SystemUsage) - float64(prev.SystemUsage)
-			
+
 			onlineCPUs := float64(s.CPUStats.OnlineCPUs)
 			if onlineCPUs == 0 {
 				onlineCPUs = float64(runtime.NumCPU())

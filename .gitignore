@@ -44,3 +44,5 @@ frontend/.env.*.local
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+.env
