@@ -1,15 +1,15 @@
 <template>
-  <div class="container-table">
-    <div class="premium-table-container">
-      <table class="premium-table">
+  <div class="container-table" :class="{ embedded }">
+    <div class="premium-table-container" :class="{ embedded }">
+      <table class="premium-table containers-table">
         <thead>
           <tr>
-            <th>Container Name</th>
-            <th>Image & Tag</th>
+            <th>Container</th>
+            <th>Image</th>
             <th>Created</th>
-            <th>Uptime</th>
+            <th>Status</th>
             <th>State</th>
-            <th class="text-right">Control</th>
+            <th class="text-right">Actions</th>
           </tr>
         </thead>
         <tbody v-if="loading">
@@ -21,61 +21,52 @@
             </td>
           </tr>
         </tbody>
-        <tbody v-else-if="filteredContainers.length > 0">
+        <tbody v-else-if="displayContainers.length > 0">
           <tr
-            v-for="c in filteredContainers"
+            v-for="c in displayContainers"
             :key="c.id"
             class="container-row"
+            :class="{ 'is-running': c.state === 'running', 'is-hovered': showInlineStats && activeLiveId === c.id }"
+            @mouseenter="showInlineStats && c.state === 'running' ? startLiveStats(c.id) : null"
+            @mouseleave="showInlineStats ? stopLiveStats() : null"
           >
-            <td data-label="Container Name">
+            <td data-label="Container">
               <div
-                class="name-cell clickable group"
+                class="name-cell clickable"
                 @click="goToLogs(c.id)"
-                @mouseenter="startLiveStats(c.id)"
-                @mouseleave="stopLiveStats"
               >
+                <div class="container-avatar" :class="c.state === 'running' ? 'running' : 'stopped'">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                  </svg>
+                </div>
                 <div class="name-main">
                   <span class="container-title">{{ c.name }}</span>
                   <span class="container-id">{{ c.id.substring(0, 12) }}</span>
-                </div>
-
-                <!-- Stats Peek Hover (Live when hovering) -->
-                <div v-if="c.state === 'running'" class="row-stats-peek">
-                  <div class="r-stat">
-                    <span
-                      class="r-val"
-                      :class="{ 'text-live': activeLiveId === c.id }"
-                    >
-                      {{
-                        (activeLiveId === c.id ? liveStats.cpu : c.cpu)?.toFixed(2) || "0.00"
-                      }}%
+                  <div
+                    v-if="showInlineStats && c.state === 'running' && activeLiveId === c.id"
+                    class="inline-stats"
+                  >
+                    <span class="stat-chip live">
+                      CPU {{ liveStats.cpu?.toFixed(1) ?? c.cpu?.toFixed(1) ?? "0.0" }}%
                     </span>
-                  </div>
-                  <div class="r-stat">
-                    <span
-                      class="r-val"
-                      :class="{ 'text-live': activeLiveId === c.id }"
-                    >
-                      {{
-                        formatBytes(activeLiveId === c.id ? liveStats.memory : c.memory)
-                      }}
+                    <span class="stat-chip live">
+                      {{ formatBytes(liveStats.memory ?? c.memory) }}
                     </span>
                   </div>
                 </div>
               </div>
             </td>
-            <td data-label="Image & Tag">
+            <td data-label="Image">
               <div class="image-cell">
                 <span class="image-name">{{ c.image.split(":")[0] }}</span>
-                <span class="image-tag">{{
-                  c.image.split(":")[1] || "latest"
-                }}</span>
+                <span class="image-tag">{{ c.image.split(":")[1] || "latest" }}</span>
               </div>
             </td>
             <td data-label="Created">
               <span class="date-label">{{ formatDate(c.created) }}</span>
             </td>
-            <td data-label="Uptime">
+            <td data-label="Status">
               <span
                 :class="[
                   'uptime-label',
@@ -97,13 +88,14 @@
               </div>
             </td>
             <td class="text-right" data-label="Actions">
-              <div class="action-group justify-end">
-                <button
-                  v-if="(sharedState.currentUser?.is_admin || sharedState.currentUser?.can_start) && c.state !== 'running'"
-                  @click="triggerConfirm(c.id, 'start')"
-                  class="icon-btn start"
-                  data-tooltip="Start Container"
-                >
+              <div class="action-group justify-end" @click.stop>
+                <div class="action-cluster primary-actions">
+                  <button
+                    v-if="(sharedState.currentUser?.is_admin || sharedState.currentUser?.can_start) && c.state !== 'running'"
+                    @click="triggerConfirm(c.id, 'start')"
+                    class="icon-btn start"
+                    data-tooltip="Start"
+                  >
                   <svg
                     viewBox="0 0 24 24"
                     width="16"
@@ -119,7 +111,7 @@
                   v-if="(sharedState.currentUser?.is_admin || sharedState.currentUser?.can_stop) && c.state === 'running'"
                   @click="triggerConfirm(c.id, 'stop')"
                   class="icon-btn stop"
-                  data-tooltip="Stop Container"
+                  data-tooltip="Stop"
                 >
                   <svg
                     viewBox="0 0 24 24"
@@ -136,7 +128,7 @@
                   v-if="sharedState.currentUser?.is_admin || sharedState.currentUser?.can_restart"
                   @click="triggerConfirm(c.id, 'restart')"
                   class="icon-btn restart"
-                  data-tooltip="Restart Container"
+                  data-tooltip="Restart"
                 >
                   <svg
                     viewBox="0 0 24 24"
@@ -150,10 +142,12 @@
                     <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
                   </svg>
                 </button>
+                </div>
+                <div class="action-cluster secondary-actions">
                 <button
                   @click="goToLogs(c.id)"
                   class="icon-btn logs"
-                  data-tooltip="View Live Logs"
+                  data-tooltip="View logs"
                 >
                   <svg
                     viewBox="0 0 24 24"
@@ -172,8 +166,8 @@
                 <button
                   v-if="sharedState.currentUser?.is_admin || sharedState.currentUser?.can_delete"
                   @click="triggerConfirm(c.id, 'remove')"
-                  class="icon-btn stop"
-                  data-tooltip="Delete Container"
+                  class="icon-btn delete"
+                  data-tooltip="Delete"
                 >
                   <svg
                     viewBox="0 0 24 24"
@@ -189,6 +183,7 @@
                     ></path>
                   </svg>
                 </button>
+                </div>
               </div>
             </td>
           </tr>
@@ -215,6 +210,9 @@
           </tr>
         </tbody>
       </table>
+      <div v-if="!loading && displayContainers.length" class="table-footer">
+        Showing {{ displayContainers.length }} container{{ displayContainers.length === 1 ? "" : "s" }}
+      </div>
     </div>
 
     <!-- Unified Action Confirmation Modal -->
@@ -248,8 +246,24 @@
 </template>
 
 <script setup>
+import { computed } from 'vue';
 import { useContainers } from '../composables/useContainers';
 import { sharedState } from '../utils/sharedState';
+
+const props = defineProps({
+  stateFilter: {
+    type: String,
+    default: 'all',
+  },
+  showInlineStats: {
+    type: Boolean,
+    default: false,
+  },
+  embedded: {
+    type: Boolean,
+    default: false,
+  },
+});
 
 const {
   loading, filteredContainers, activeLiveId, liveStats,
@@ -257,29 +271,88 @@ const {
   startLiveStats, stopLiveStats, goToLogs, triggerConfirm, executeAction,
   formatBytes, formatDate,
 } = useContainers();
+
+const displayContainers = computed(() => {
+  if (props.stateFilter === 'running') {
+    return filteredContainers.value.filter((c) => c.state === 'running');
+  }
+  if (props.stateFilter === 'stopped') {
+    return filteredContainers.value.filter((c) => c.state !== 'running');
+  }
+  return filteredContainers.value;
+});
 </script>
 
 <style scoped>
-.premium-table tr {
-  cursor: pointer;
-  transition: all 0.2s;
+.premium-table-container.embedded {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
 }
 
-.premium-table tr.active td {
-  background: var(--accent-soft);
-  color: var(--accent);
+.containers-table tr.container-row {
+  transition: background 0.2s ease;
+}
+
+.containers-table tr.container-row td:first-child {
+  position: relative;
+}
+
+.containers-table tr.container-row:hover td {
+  background: var(--card-hover);
+}
+
+.containers-table tr.container-row.is-running:hover td:first-child::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 4px 4px 0;
+  background: var(--success);
+}
+
+.containers-table tr.container-row:not(.is-running):hover td:first-child::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 4px 4px 0;
+  background: var(--text-mute);
+  opacity: 0.5;
 }
 
 .action-group {
   display: flex;
-  gap: 0.5rem;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.action-cluster {
+  display: flex;
+  gap: 0.35rem;
+  padding: 0.25rem;
+  border-radius: var(--radius-md);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+}
+
+.secondary-actions {
+  background: transparent;
+  border-color: transparent;
+  padding: 0.25rem 0;
 }
 
 .icon-btn {
-  width: 38px;
-  height: 38px;
-  border-radius: 12px;
-  border: 1px solid var(--border);
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid transparent;
   background: var(--bg-input);
   color: var(--text-dim);
   display: flex;
@@ -290,157 +363,253 @@ const {
 }
 
 .icon-btn:hover {
-  background: var(--bg-card);
-  transform: translateY(-2px);
+  transform: translateY(-1px);
   color: var(--text-main);
-  border-color: var(--accent);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  border-color: var(--border);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
 }
 
-.icon-btn.start:hover { color: var(--success); border-color: var(--success); box-shadow: 0 4px 12px rgba(var(--success-rgb), 0.2); }
-.icon-btn.stop:hover { color: var(--error); border-color: var(--error); box-shadow: 0 4px 12px rgba(var(--error-rgb), 0.2); }
-.icon-btn.restart:hover { color: var(--warning); border-color: var(--warning); box-shadow: 0 4px 12px rgba(var(--warning-rgb), 0.2); }
+.icon-btn.start:hover {
+  color: var(--success);
+  border-color: rgba(var(--success-rgb), 0.35);
+  background: rgba(var(--success-rgb), 0.08);
+}
+
+.icon-btn.stop:hover {
+  color: var(--warning);
+  border-color: rgba(var(--warning-rgb), 0.35);
+  background: rgba(var(--warning-rgb), 0.08);
+}
+
+.icon-btn.restart:hover {
+  color: var(--accent);
+  border-color: rgba(var(--accent-rgb), 0.35);
+  background: var(--accent-soft);
+}
+
 .icon-btn.logs:hover {
   color: var(--accent);
-  border-color: var(--accent);
-  box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.2);
+  border-color: rgba(var(--accent-rgb), 0.35);
+  background: var(--accent-soft);
 }
 
-/* Row Stats Peek */
-.row-stats-peek {
+.icon-btn.delete:hover {
+  color: var(--error);
+  border-color: rgba(var(--error-rgb), 0.35);
+  background: rgba(var(--error-rgb), 0.08);
+}
+
+.container-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
   display: flex;
-  gap: 1rem;
-  opacity: 0;
-  transform: translateX(-10px);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  background: var(--bg-card);
-  padding: 0.4rem 0.8rem;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  pointer-events: none;
-  margin-left: 1rem;
-}
-
-.name-cell:hover .row-stats-peek {
-  opacity: 1;
-  transform: translateX(0);
-}
-
-.r-stat {
-  display: flex;
-  flex-direction: column;
   align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
 }
 
-.r-val {
-  font-size: 0.75rem;
-  font-weight: 900;
-  color: var(--accent);
-  font-family: var(--font-mono);
-  transition: color 0.3s;
+.container-avatar svg {
+  width: 18px;
+  height: 18px;
 }
 
-.text-live {
-  color: var(--success) !important;
-  text-shadow: 0 0 8px rgba(var(--success-rgb), 0.4);
+.container-avatar.running {
+  background: rgba(var(--success-rgb), 0.1);
+  color: var(--success);
+  border-color: rgba(var(--success-rgb), 0.2);
 }
 
-.r-lab {
-  font-size: 0.55rem;
-  font-weight: 800;
+.container-avatar.stopped {
+  background: var(--bg-subtle);
   color: var(--text-mute);
-  text-transform: uppercase;
+}
+
+.inline-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+  animation: stats-in 0.15s ease-out;
+}
+
+@keyframes stats-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.stat-chip {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.stat-chip.live {
+  color: var(--success);
+  border-color: rgba(var(--success-rgb), 0.35);
+  background: rgba(var(--success-rgb), 0.08);
 }
 
 .name-cell {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  gap: 0.75rem;
   min-width: 0;
+}
+
+.name-cell.clickable {
+  cursor: pointer;
 }
 
 .name-main {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .image-cell {
   display: flex;
   flex-direction: column;
-  text-align: left;
+  gap: 0.2rem;
   min-width: 0;
 }
 
+.image-name {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
 .status-pill {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.6rem;
-  font-size: 0.7rem;
-  font-weight: 950;
-  padding: 0.4rem 0.8rem;
-  border-radius: 10px;
+  gap: 0.45rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
   width: fit-content;
-  border: 1px solid rgba(var(--accent-rgb), 0.2);
-  background: rgba(var(--accent-rgb), 0.05);
-  color: var(--accent);
+  border: 1px solid transparent;
+}
+
+.status-pill.is-running {
+  color: var(--success);
+  background: rgba(var(--success-rgb), 0.1);
+  border-color: rgba(var(--success-rgb), 0.2);
+}
+
+.status-pill.is-stopped {
+  color: var(--text-mute);
+  background: var(--bg-subtle);
+  border-color: var(--border-subtle);
 }
 
 .pulse-dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
+  flex-shrink: 0;
 }
 
-.is-running {
-  color: var(--success) !important;
-}
 .is-running .pulse-dot {
   background: var(--success);
-  box-shadow: 0 0 8px var(--success);
+  box-shadow: 0 0 6px rgba(var(--success-rgb), 0.6);
   animation: pulse-mini 2s infinite;
 }
 
-.is-stopped {
-  color: var(--error) !important;
-}
 .is-stopped .pulse-dot {
-  background: var(--error);
+  background: var(--text-mute);
+}
+
+.uptime-label.is-stopped {
+  color: var(--text-dim) !important;
+  border-color: var(--border) !important;
+  background: var(--bg-subtle) !important;
 }
 
 @keyframes pulse-mini {
-  0% { transform: scale(0.95); opacity: 1; }
-  50% { transform: scale(1.1); opacity: 0.7; }
-  100% { transform: scale(0.95); opacity: 1; }
+  0%, 100% { transform: scale(0.95); opacity: 1; }
+  50% { transform: scale(1.08); opacity: 0.75; }
+}
+
+.table-footer {
+  padding: 0.75rem 1.25rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-mute);
+  border-top: 1px solid var(--border);
+  background: var(--bg-subtle);
 }
 
 @media (max-width: 850px) {
+  .action-cluster {
+    background: transparent;
+    border: none;
+    padding: 0;
+  }
+
+  .action-group {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .inline-stats {
+    display: none;
+  }
+
   .premium-table thead {
     display: none;
   }
+
   .premium-table tbody tr {
     display: block;
-    padding: 1.25rem;
-    margin-bottom: 1.25rem;
+    padding: 1.15rem;
+    margin-bottom: 1rem;
     background: var(--bg-card);
     border: 1px solid var(--border);
-    border-radius: 20px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    border-radius: var(--radius-xl);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
   }
+
   .premium-table tbody tr td {
     display: flex;
     flex-direction: column;
-    padding: 0.6rem 0;
+    padding: 0.5rem 0;
     border: none;
     text-align: left !important;
-    gap: 0.35rem;
+    gap: 0.3rem;
   }
+
   .premium-table tbody tr td::before {
     content: attr(data-label);
     display: block;
-    font-size: 0.65rem;
+    font-size: 0.62rem;
     font-weight: 800;
     color: var(--text-mute);
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
+  }
+
+  .premium-table tbody tr td:first-child::before {
+    display: none;
   }
 }
 
@@ -457,7 +626,7 @@ const {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 280px;
+  min-height: 260px;
 }
 
 .empty-state-content {
@@ -468,30 +637,34 @@ const {
 }
 
 .empty-icon-box {
-  width: 72px;
-  height: 72px;
-  background: var(--bg-input);
-  border-radius: 50%;
+  width: 68px;
+  height: 68px;
+  background: var(--accent-soft);
+  border-radius: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-mute);
-  opacity: 0.6;
-  margin-bottom: 1.25rem;
-  border: 1px dashed var(--border);
+  color: var(--accent);
+  margin-bottom: 1rem;
+  border: 1px solid rgba(var(--accent-rgb), 0.15);
+}
+
+.empty-icon-box svg {
+  width: 32px;
+  height: 32px;
 }
 
 .empty-title {
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   font-weight: 800;
   color: var(--text-main);
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.4rem;
 }
 
 .empty-text {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   color: var(--text-mute);
-  max-width: 320px;
-  line-height: 1.6;
+  max-width: 300px;
+  line-height: 1.55;
 }
 </style>

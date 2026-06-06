@@ -1,7 +1,7 @@
 <template>
   <div class="user-manager">
-    <div class="premium-table-container glass">
-      <table class="premium-table">
+    <div class="premium-table-container" :class="{ embedded }">
+      <table class="premium-table admin-table">
         <thead>
           <tr>
             <th>User</th>
@@ -15,6 +15,7 @@
           <tr v-for="u in nonAdminUsers" :key="u.id">
             <td data-label="User">
               <div class="user-cell">
+                <div class="mini-avatar">{{ u.username[0]?.toUpperCase() }}</div>
                 <div class="user-info">
                   <span class="user-name">{{ u.username }}</span>
                 </div>
@@ -220,7 +221,12 @@
                   </p>
                 </div>
               </div>
-              <button class="close-btn" @click="closeAllModals">×</button>
+              <button class="close-btn" @click="closeAllModals" aria-label="Close">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
             </div>
 
             <div class="modal-card-body">
@@ -246,7 +252,7 @@
               </div>
 
               <div class="perm-section">
-                <label class="section-label-alt">Container Visibility</label>
+                <label class="label-caps">Container Visibility</label>
                 <div class="access-toggle-container">
                   <button
                     :class="['access-choice', { active: isRestricted }]"
@@ -265,12 +271,86 @@
                 <Transition name="slide-down">
                   <div v-if="isRestricted" class="pattern-box">
                     <label class="label-caps">Allowed Patterns</label>
-                    <input
-                      type="text"
-                      v-model="activeUser.allowed_containers"
-                      class="premium-input"
-                      placeholder="e.g. api-*, prod-web, ^front.*"
-                    />
+                    <div class="pattern-input-wrap">
+                      <input
+                        type="text"
+                        v-model="activeUser.allowed_containers"
+                        class="premium-input"
+                        placeholder="e.g. api-*, prod-web, ^front.*"
+                        autocomplete="off"
+                        @focus="onPatternFocus"
+                        @blur="hidePatternSuggestions"
+                        @input="patternSuggestionsOpen = true"
+                      />
+                      <Transition name="fade">
+                        <ul
+                          v-if="patternSuggestionsOpen && filteredPatternSuggestions.length"
+                          class="pattern-suggestions"
+                          role="listbox"
+                        >
+                          <li
+                            v-for="name in filteredPatternSuggestions"
+                            :key="name"
+                            role="option"
+                          >
+                            <button
+                              type="button"
+                              class="pattern-suggestion-btn"
+                              @mousedown.prevent="applyPatternSuggestion(name)"
+                            >
+                              <span class="suggestion-dot"></span>
+                              {{ name }}
+                            </button>
+                          </li>
+                        </ul>
+                      </Transition>
+                    </div>
+
+                    <div v-if="runningContainerNames.length" class="pattern-fleet mt-3">
+                      <div class="pattern-fleet-head">
+                        <span class="label-caps label-caps-inline">Running containers</span>
+                        <span class="pattern-fleet-count">{{ availableFleetNames.length }} available</span>
+                        <button
+                          v-if="runningContainerNames.length > fleetInlineLimit"
+                          type="button"
+                          class="pattern-fleet-toggle"
+                          @click="fleetExpanded = !fleetExpanded"
+                        >
+                          {{ fleetExpanded ? "Hide list" : "Browse all" }}
+                        </button>
+                      </div>
+                      <p
+                        v-if="runningContainerNames.length > fleetInlineLimit && !fleetExpanded"
+                        class="pattern-fleet-hint"
+                      >
+                        Type in the field for quick picks, or browse the full running list.
+                      </p>
+                      <div
+                        v-show="showFleetList"
+                        class="pattern-fleet-chips"
+                        :class="{ scrollable: runningContainerNames.length > fleetInlineLimit }"
+                      >
+                        <button
+                          v-for="name in availableFleetNames"
+                          :key="name"
+                          type="button"
+                          class="pattern-fleet-chip"
+                          @click="applyPatternSuggestion(name)"
+                        >
+                          {{ name }}
+                        </button>
+                        <span
+                          v-if="!availableFleetNames.length"
+                          class="pattern-fleet-all-added"
+                        >
+                          All running containers are already in the pattern.
+                        </span>
+                      </div>
+                    </div>
+                    <p v-else-if="containersLoaded" class="pattern-fleet-empty mt-3">
+                      No running containers on this host right now.
+                    </p>
+
                     <div class="pattern-examples mt-3">
                       <div class="example-item">
                         <code class="tag">api-*</code>
@@ -289,8 +369,8 @@
                 </Transition>
               </div>
 
-              <div class="perm-section">
-                <label class="section-label-alt">Action Rights</label>
+              <div class="perm-section perm-section-compact">
+                <label class="label-caps">Action Rights</label>
                 <div class="modern-rights-grid">
                   <label
                     v-for="action in actionRights"
@@ -433,7 +513,10 @@ import { showToast } from "../utils/sharedState";
 import { sharedState } from "../utils/sharedState";
 import { apiFetch } from "../utils/apiFetch";
 
-const props = defineProps(["token"]);
+const props = defineProps({
+  token: String,
+  embedded: { type: Boolean, default: false },
+});
 const emit = defineEmits(["update-count"]);
 
 const envShellPermission = computed(() => sharedState.envShellPermission === true);
@@ -492,6 +575,118 @@ const isRestricted = computed(() =>
 const setRestricted = (val) => {
   if (showCreateModal.value) newUser.value.is_restricted = val;
   else editingUser.value.is_restricted_access = val;
+  if (val) fetchRunningContainers();
+};
+
+const fleetContainers = ref([]);
+const containersLoaded = ref(false);
+const patternSuggestionsOpen = ref(false);
+const fleetExpanded = ref(false);
+const fleetInlineLimit = 6;
+let patternBlurTimer = null;
+
+const runningContainerNames = computed(() =>
+  fleetContainers.value
+    .filter((c) => c.state === "running")
+    .map((c) => c.name)
+    .sort((a, b) => a.localeCompare(b)),
+);
+
+const selectedPatternNames = computed(() => {
+  const val = activeUser.value?.allowed_containers || "";
+  if (!val.trim() || val.trim() === ".*") return new Set();
+  return new Set(
+    val
+      .split(",")
+      .map((p) => p.trim())
+      .filter(Boolean),
+  );
+});
+
+const availableFleetNames = computed(() =>
+  runningContainerNames.value.filter((n) => !selectedPatternNames.value.has(n)),
+);
+
+const showFleetList = computed(
+  () =>
+    runningContainerNames.value.length <= fleetInlineLimit || fleetExpanded.value,
+);
+
+const patternQuery = computed(() => {
+  const val = activeUser.value?.allowed_containers || "";
+  const segment = val.split(",").pop()?.trim() || "";
+  return segment === ".*" ? "" : segment;
+});
+
+const filteredPatternSuggestions = computed(() => {
+  const q = patternQuery.value.toLowerCase();
+  const selected = new Set(
+    (activeUser.value?.allowed_containers || "")
+      .split(",")
+      .map((p) => p.trim())
+      .filter(Boolean),
+  );
+  let names = runningContainerNames.value.filter((n) => !selected.has(n));
+  if (q) {
+    names = names.filter((n) => n.toLowerCase().includes(q));
+  }
+  return names.slice(0, 8);
+});
+
+const fetchRunningContainers = async () => {
+  try {
+    const res = await apiFetch("/api/containers", {
+      headers: { Authorization: `Bearer ${props.token}` },
+    });
+    if (res.ok) {
+      fleetContainers.value = await res.json();
+    }
+  } catch (err) {
+    console.error(err);
+  } finally {
+    containersLoaded.value = true;
+  }
+};
+
+const onPatternFocus = () => {
+  clearTimeout(patternBlurTimer);
+  patternSuggestionsOpen.value = true;
+  fetchRunningContainers();
+};
+
+const hidePatternSuggestions = () => {
+  patternBlurTimer = setTimeout(() => {
+    patternSuggestionsOpen.value = false;
+  }, 150);
+};
+
+const applyPatternSuggestion = (name) => {
+  const target = activeUser.value;
+  const val = (target.allowed_containers || "").trim();
+  const existing = val && val !== ".*"
+    ? val.split(",").map((p) => p.trim()).filter(Boolean)
+    : [];
+
+  if (existing.includes(name)) return;
+
+  const query = patternQuery.value;
+  if (!existing.length) {
+    target.allowed_containers = name;
+    return;
+  }
+
+  const lastIdx = existing.length - 1;
+  if (
+    query &&
+    existing[lastIdx].toLowerCase().includes(query.toLowerCase()) &&
+    existing[lastIdx] !== name
+  ) {
+    existing[lastIdx] = name;
+    target.allowed_containers = existing.join(", ");
+    return;
+  }
+
+  target.allowed_containers = [...existing, name].join(", ");
 };
 
 const closeAllModals = () => {
@@ -501,6 +696,10 @@ const closeAllModals = () => {
   showResetModal.value = false;
   resetPassword.value = "";
   resetTargetUser.value = null;
+  patternSuggestionsOpen.value = false;
+  fleetExpanded.value = false;
+  containersLoaded.value = false;
+  fleetContainers.value = [];
 };
 
 const fetchStaff = async () => {
@@ -601,6 +800,8 @@ const toggleUserStatus = async (user) => {
 const openPermissions = (user) => {
   editingUser.value = JSON.parse(JSON.stringify(user));
   showPermissionsModal.value = true;
+  containersLoaded.value = false;
+  if (editingUser.value.is_restricted_access) fetchRunningContainers();
 };
 
 const openResetPassword = (user) => {
@@ -702,6 +903,7 @@ const confirmDelete = async () => {
 
 const openCreateModal = () => {
   showCreateModal.value = true;
+  containersLoaded.value = false;
 };
 defineExpose({ openCreateModal });
 onMounted(fetchStaff);
@@ -861,7 +1063,39 @@ onMounted(fetchStaff);
   padding: 1.5rem 2rem;
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
   border-bottom: 1px solid var(--border);
+}
+
+.close-btn {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-input);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.close-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.close-btn:hover {
+  background: var(--bg-subtle);
+  color: var(--text-main);
+  border-color: var(--border-active);
+}
+
+.close-btn:active {
+  transform: scale(0.96);
 }
 
 .header-content {
@@ -904,11 +1138,37 @@ onMounted(fetchStaff);
 }
 .label-caps {
   display: block;
+  font-family: var(--font-main);
   text-transform: uppercase;
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   font-weight: 800;
+  letter-spacing: 0.06em;
   color: var(--text-mute);
   margin-bottom: 0.5rem;
+}
+
+.label-caps-inline {
+  display: inline-block;
+  margin-bottom: 0;
+}
+
+.perm-section {
+  margin-bottom: 1.35rem;
+}
+
+.perm-section:last-child {
+  margin-bottom: 0;
+}
+
+.perm-section-compact {
+  margin-top: 0.25rem;
+}
+
+.control-text {
+  font-family: var(--font-main);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-dim);
 }
 
 .premium-input {
@@ -917,6 +1177,9 @@ onMounted(fetchStaff);
   border: 2px solid var(--border);
   border-radius: 12px;
   padding: 0.75rem 1rem;
+  font-family: var(--font-main);
+  font-size: 0.85rem;
+  font-weight: 600;
   color: var(--text-main);
   transition: all 0.2s;
 }
@@ -938,10 +1201,12 @@ onMounted(fetchStaff);
 .access-choice {
   border: none;
   background: transparent;
-  padding: 0.75rem;
+  padding: 0.65rem 0.75rem;
   border-radius: 12px;
+  font-family: var(--font-main);
+  font-size: 0.78rem;
   font-weight: 700;
-  color: var(--text-mute);
+  color: var(--text-dim);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -970,38 +1235,200 @@ onMounted(fetchStaff);
   border: 1px dashed var(--border);
 }
 
+.pattern-input-wrap {
+  position: relative;
+}
+
+.pattern-suggestions {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  margin: 0;
+  padding: 0.35rem;
+  list-style: none;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 12px 28px -8px var(--shadow);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.pattern-suggestion-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.55rem 0.65rem;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-family: var(--font-main);
+  color: var(--text-main);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.pattern-suggestion-btn:hover {
+  background: var(--bg-subtle);
+}
+
+.suggestion-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 6px rgba(var(--success-rgb), 0.45);
+  flex-shrink: 0;
+}
+
+.pattern-fleet-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.45rem;
+}
+
+.pattern-fleet-count {
+  font-family: var(--font-main);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--success);
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(var(--success-rgb), 0.1);
+  border: 1px solid rgba(var(--success-rgb), 0.18);
+}
+
+.pattern-fleet-toggle {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  font-family: var(--font-main);
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0.15rem 0.25rem;
+}
+
+.pattern-fleet-toggle:hover {
+  text-decoration: underline;
+}
+
+.pattern-fleet-hint,
+.pattern-fleet-empty,
+.pattern-fleet-all-added {
+  font-family: var(--font-main);
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--text-mute);
+  line-height: 1.4;
+}
+
+.pattern-fleet-hint {
+  margin: 0 0 0.35rem;
+}
+
+.pattern-fleet-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.pattern-fleet-chips.scrollable {
+  max-height: 5.5rem;
+  overflow-y: auto;
+  padding: 0.35rem;
+  border-radius: 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+}
+
+.pattern-fleet-all-added {
+  font-style: italic;
+}
+
+.pattern-fleet-chip {
+  border: 1px solid rgba(var(--success-rgb), 0.22);
+  background: rgba(var(--success-rgb), 0.08);
+  color: var(--success);
+  font-family: var(--font-main);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.22rem 0.55rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.pattern-fleet-chip:hover {
+  background: rgba(var(--success-rgb), 0.14);
+  border-color: rgba(var(--success-rgb), 0.35);
+}
+
+.pattern-fleet-empty {
+  margin: 0;
+}
+
 /* Rights Grid */
 .modern-rights-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 1rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
 }
+
 .right-card {
   cursor: pointer;
 }
+
 .right-card input {
   display: none;
 }
+
 .right-card-content {
-  padding: 1rem 1.25rem;
+  padding: 0.45rem 0.6rem;
   background: var(--bg-input);
-  border: 2px solid var(--border);
-  border-radius: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.45rem;
+  min-height: 0;
+}
+
+.right-label {
+  font-family: var(--font-main);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+
+.right-card.checked .right-label {
+  color: var(--accent);
 }
 
 .right-card.checked .right-card-content {
   border-color: var(--accent);
   background: rgba(var(--accent-rgb), 0.05);
 }
+
 .custom-check {
-  width: 20px;
-  height: 20px;
-  border-radius: 6px;
-  border: 2px solid var(--border);
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  border: 1.5px solid var(--border);
+  flex-shrink: 0;
 }
+
 .right-card.checked .custom-check {
   background: var(--accent);
   border-color: var(--accent);
@@ -1054,6 +1481,32 @@ onMounted(fetchStaff);
   align-items: center;
   justify-content: center;
   margin: 0 auto;
+}
+
+.user-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.mini-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid rgba(var(--accent-rgb), 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.user-name {
+  font-weight: 800;
+  color: var(--text-main);
 }
 
 .action-group {
@@ -1173,6 +1626,9 @@ onMounted(fetchStaff);
   .modal-card-header, .modal-card-body, .modal-card-footer {
     padding: 1rem 1.25rem;
   }
+  .modern-rights-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 .pattern-examples {
   display: flex;
@@ -1191,8 +1647,9 @@ onMounted(fetchStaff);
 }
 
 .tag {
-  font-family: "JetBrains Mono", monospace;
-  font-size: 0.7rem;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
   background: var(--accent-soft);
   color: var(--accent);
   padding: 0.15rem 0.4rem;
@@ -1203,7 +1660,8 @@ onMounted(fetchStaff);
 }
 
 .desc {
-  font-size: 0.75rem;
+  font-family: var(--font-main);
+  font-size: 0.72rem;
   color: var(--text-mute);
   font-weight: 500;
 }

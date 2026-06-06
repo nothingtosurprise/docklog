@@ -37,7 +37,7 @@ DockLog focuses on fast deployment, low resource usage, and team-safe Docker vis
 
 ## 📊 Dashboard
 
-![Dashboard](assets/dashboard.png)
+![Dashboard](assets/dashboard.webp)
 
 Real-time Docker monitoring with lightweight system metrics and container controls.
 
@@ -45,15 +45,31 @@ Real-time Docker monitoring with lightweight system metrics and container contro
 
 ## 🐳 Container Management
 
-![Containers](assets/containers.png)
+![Containers](assets/containers.webp)
 
 Monitor, control, and manage containers with fast operational actions.
 
 ---
 
+## 📜 Real-Time Logs
+
+![Logs](assets/logs.webp)
+
+Stream container logs live with search, highlighting, and multi-container layout.
+
+---
+
+## 📈 System Health
+
+![System Health](assets/health.webp)
+
+Historical CPU and memory charts with configurable time ranges.
+
+---
+
 ## 🔐 RBAC & Staff Management
 
-![RBAC](assets/rbac.png)
+![RBAC](assets/rbac.webp)
 
 Granular container-level permissions with wildcard and regex-based access control.
 
@@ -61,7 +77,7 @@ Granular container-level permissions with wildcard and regex-based access contro
 
 ## 🕵️ Security Audit Logs
 
-![Audit Logs](assets/audit-logs.png)
+![Audit Logs](assets/audit-logs.webp)
 
 Track administrative actions and security events with a complete audit trail.
 
@@ -325,8 +341,6 @@ Recommended:
 
 # 📚 Documentation
 
-- [Changelog](CHANGE.md)
-- [Design system (colors & typography)](docs/DESIGN.md)
 - [Architecture Overview](docs/ARCHITECTURE.md)
 - [Security & RBAC](docs/SECURITY.md)
 

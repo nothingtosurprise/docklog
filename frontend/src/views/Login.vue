@@ -6,7 +6,7 @@
           <img :src="logoSrc" alt="DockLog" class="login-logo-img" />
         </div>
         <h1>DockLog</h1>
-        <p class="text-mute">Enterprise Container Observability</p>
+        <p class="text-mute">Enterprise container observability</p>
       </div>
 
       <form @submit.prevent="handleLogin" class="login-form">
@@ -115,10 +115,25 @@ const handleLogin = async () => {
   padding: 2rem;
 }
 
+.login-overlay::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 48px 48px;
+  opacity: 0.12;
+  mask-image: radial-gradient(circle at 50% 40%, black, transparent 75%);
+  pointer-events: none;
+}
+
 .login-card {
+  position: relative;
+  z-index: 1;
   width: 100%;
   max-width: 440px;
-  padding: 3rem 2.75rem;
+  padding: 2.75rem 2.5rem;
   border-radius: var(--radius-2xl);
   border: 1px solid var(--border);
   background: var(--glass-bg);

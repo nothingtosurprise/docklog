@@ -15,7 +15,7 @@
           migrated to an unknown sector.
         </p>
 
-        <router-link to="/dashboard" class="action-btn primary">
+        <router-link to="/dashboard" class="page-btn primary">
           <svg
             viewBox="0 0 24 24"
             width="18"
@@ -53,11 +53,14 @@
 
 .not-found-card {
   width: 100%;
-  max-width: 500px;
-  padding: 4rem 3rem;
-  border-radius: 40px;
+  max-width: 480px;
+  padding: 3rem 2.5rem;
+  border-radius: var(--radius-2xl);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
   text-align: center;
   z-index: 10;
+  box-shadow: 0 24px 64px -16px var(--shadow);
   animation: slideUp 0.8s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
@@ -102,39 +105,25 @@
 }
 
 .error-content h1 {
-  font-size: 1.75rem;
-  font-weight: 950;
+  font-size: 1.5rem;
+  font-weight: 800;
   color: var(--text-main);
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
   letter-spacing: -0.03em;
 }
 
 .error-content p {
   color: var(--text-dim);
-  font-size: 1rem;
+  font-size: 0.92rem;
   line-height: 1.6;
-  margin-bottom: 2.5rem;
-  font-weight: 500;
+  margin-bottom: 2rem;
 }
 
-.action-btn {
+.page-btn.primary {
   display: inline-flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.9rem 1.75rem;
-  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
-  color: #fff;
+  gap: 0.5rem;
   text-decoration: none;
-  border-radius: var(--radius-md);
-  font-weight: 700;
-  font-size: 0.9rem;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  box-shadow: 0 8px 20px rgba(var(--accent-rgb), 0.28);
-}
-
-.action-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 28px rgba(var(--accent-rgb), 0.35);
 }
 
 .background-decor {

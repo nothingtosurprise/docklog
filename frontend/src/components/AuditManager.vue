@@ -1,8 +1,7 @@
 <template>
   <div class="audit-manager">
-    <!-- TOOLBAR -->
-    <div class="audit-toolbar">
-      <div class="search-box glass">
+    <div class="page-toolbar audit-toolbar">
+      <div class="search-box">
         <svg
           viewBox="0 0 24 24"
           width="16"
@@ -22,10 +21,7 @@
       </div>
 
       <div class="filter-group">
-        <button
-          @click="showDateModal = true"
-          class="premium-btn glass mini date-trigger"
-        >
+        <button @click="showDateModal = true" class="page-btn">
           <svg
             viewBox="0 0 24 24"
             width="14"
@@ -43,8 +39,8 @@
         </button>
         <button
           @click="fetchAuditLogs"
-          class="icon-btn refresh-btn"
-          :class="{ rotating: loadingLogs }"
+          class="page-btn primary"
+          :disabled="loadingLogs"
         >
           <svg
             viewBox="0 0 24 24"
@@ -53,17 +49,18 @@
             fill="none"
             stroke="currentColor"
             stroke-width="3"
+            :class="{ rotating: loadingLogs }"
           >
             <polyline points="23 4 23 10 17 10"></polyline>
             <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
           </svg>
+          Refresh
         </button>
       </div>
     </div>
 
-    <!-- DATA TABLE -->
-    <div class="premium-table-container glass mt-4">
-      <table class="premium-table">
+    <div class="premium-table-container" :class="{ embedded }">
+      <table class="premium-table audit-table">
         <thead>
           <tr>
             <th>Time</th>
@@ -252,7 +249,10 @@
 import { ref, computed, onMounted } from "vue";
 import { apiFetch } from "../utils/apiFetch";
 
-const props = defineProps(["token"]);
+const props = defineProps({
+  token: String,
+  embedded: { type: Boolean, default: false },
+});
 const emit = defineEmits(["update-count"]);
 
 const auditLogs = ref([]);
@@ -704,18 +704,32 @@ onMounted(fetchAuditLogs);
   flex-direction: column;
   align-items: center;
 }
+.audit-toolbar {
+  margin-bottom: 1rem;
+}
+
+.filter-group {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.audit-toolbar .search-box {
+  flex: 1;
+  min-width: 200px;
+}
+
 .empty-icon-box {
-  width: 80px;
-  height: 80px;
-  background: var(--bg-input);
-  border-radius: 50%;
+  width: 68px;
+  height: 68px;
+  background: var(--accent-soft);
+  border-radius: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-mute);
-  opacity: 0.5;
-  margin-bottom: 1.5rem;
-  border: 1px dashed var(--border);
+  color: var(--accent);
+  margin-bottom: 1rem;
+  border: 1px solid rgba(var(--accent-rgb), 0.15);
 }
 .empty-title {
   font-size: 1.2rem;

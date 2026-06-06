@@ -1,115 +1,104 @@
 <template>
-  <div class="health-container">
-    <!-- Header with Filters -->
-    <div class="section-header animate-slide-up">
-      <div class="header-content">
-        <h3>System Diagnostics</h3>
-        <p class="text-mute">
-          Historical resource utilization metrics
-          <span v-if="isPartialData" class="coverage-hint">
-            • Showing available {{ formatDuration(availableHours) }}
-          </span>
-        </p>
-      </div>
-      <div class="header-actions">
-        <div class="filter-pills glass">
-          <button
-            v-for="f in filters"
-            :key="f.label"
-            @click="activeFilter = f.value"
-            :class="[
-              'range-pill',
-              { 
-                active: activeFilter === f.value,
-                'is-partial': availableHours < f.value
-              }
-            ]"
-            :data-tooltip="availableHours < f.value ? `${f.note} (Partial Data Available)` : f.note"
-          >
-            {{ f.short }}
-          </button>
-          <button
-            class="range-pill"
-            @click="showCustomModal = true"
-            :class="{ active: activeFilter === 'custom' }"
-            data-tooltip="Select specific dates"
-          >
-            Custom
-          </button>
+  <div class="page-view health-container">
+    <section class="page-hero animate-slide-up">
+      <div class="page-hero-body">
+        <div class="page-hero-copy">
+          <span class="page-hero-eyebrow">Diagnostics</span>
+          <h1>System health</h1>
+          <p class="page-hero-sub">
+            Historical CPU and memory utilization
+            <span v-if="isPartialData" class="coverage-hint">
+              · Showing {{ formatDuration(availableHours) }} of data
+            </span>
+          </p>
+        </div>
+        <div class="page-hero-actions">
+          <div class="page-filter-pills">
+            <button
+              v-for="f in filters"
+              :key="f.label"
+              @click="activeFilter = f.value"
+              :class="[
+                'page-filter-pill',
+                {
+                  active: activeFilter === f.value,
+                  'is-partial': availableHours < f.value,
+                },
+              ]"
+              :data-tooltip="availableHours < f.value ? `${f.note} (partial data)` : f.note"
+            >
+              {{ f.short }}
+            </button>
+            <button
+              class="page-filter-pill"
+              @click="showCustomModal = true"
+              :class="{ active: activeFilter === 'custom' }"
+              data-tooltip="Select specific dates"
+            >
+              Custom
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+      <div class="page-hero-mesh" aria-hidden="true"></div>
+    </section>
 
-    <!-- Summary Stats -->
-    <div class="summary-grid animate-slide-up" style="animation-delay: 0.1s">
-      <div class="premium-stat-card">
+    <section class="page-metrics animate-slide-up" style="animation-delay: 0.05s">
+      <div class="page-metric-card">
         <div class="stat-header">
           <div class="stat-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
-            </svg>
+            <AppIcon name="activity" />
           </div>
           <span class="badge badge-dim">Average</span>
         </div>
         <div class="stat-content">
-          <span class="stat-label">AVG CPU LOAD</span>
+          <span class="stat-label">Avg CPU load</span>
           <span class="stat-value">{{ avgCpu }}%</span>
         </div>
       </div>
 
-      <div class="premium-stat-card">
+      <div class="page-metric-card">
         <div class="stat-header">
           <div class="stat-icon error">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-            </svg>
+            <AppIcon name="bell" />
           </div>
           <span class="badge badge-error">Peak</span>
         </div>
         <div class="stat-content">
-          <span class="stat-label">PEAK CPU SPIKE</span>
+          <span class="stat-label">Peak CPU spike</span>
           <span class="stat-value">{{ maxCpu }}%</span>
         </div>
       </div>
 
-      <div class="premium-stat-card">
+      <div class="page-metric-card">
         <div class="stat-header">
           <div class="stat-icon success">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
-              <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
-              <line x1="6" y1="6" x2="6.01" y2="6"></line>
-              <line x1="6" y1="18" x2="6.01" y2="18"></line>
-            </svg>
+            <AppIcon name="server" />
           </div>
           <span class="badge badge-success">Memory</span>
         </div>
         <div class="stat-content">
-          <span class="stat-label">AVG MEMORY USAGE</span>
+          <span class="stat-label">Avg memory</span>
           <span class="stat-value">{{ avgMem }} GB</span>
         </div>
       </div>
 
-      <div class="premium-stat-card">
+      <div class="page-metric-card">
         <div class="stat-header">
           <div class="stat-icon warning">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-            </svg>
+            <AppIcon name="containers" />
           </div>
           <span class="badge badge-warning">Max</span>
         </div>
         <div class="stat-content">
-          <span class="stat-label">PEAK MEMORY LOAD</span>
+          <span class="stat-label">Peak memory</span>
           <span class="stat-value">{{ maxMem }} GB</span>
         </div>
       </div>
-    </div>
+    </section>
 
-    <!-- Charts Section -->
-    <div class="health-grid animate-slide-up" style="animation-delay: 0.2s">
-      <div class="chart-section glass">
+    <section class="health-grid animate-slide-up" style="animation-delay: 0.1s">
+      <div class="chart-section">
         <div class="chart-header">
           <h4>CPU Utilization History</h4>
           <span class="unit-badge">% Load</span>
@@ -126,7 +115,7 @@
         </div>
       </div>
 
-      <div class="chart-section glass">
+      <div class="chart-section">
         <div class="chart-header">
           <h4>Memory Consumption</h4>
           <span class="unit-badge">Gigabytes</span>
@@ -142,7 +131,7 @@
           </div>
         </div>
       </div>
-    </div>
+    </section>
 
     <!-- Custom Range Modal -->
     <Teleport to="body">
@@ -175,6 +164,7 @@
 </template>
 
 <script setup>
+import AppIcon from "../components/AppIcon.vue";
 import { ref, onMounted, onUnmounted, watch, computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { Line } from "vue-chartjs";
@@ -485,85 +475,33 @@ onMounted(() => {
 
 <style scoped>
 .health-container {
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-  padding-bottom: 2rem;
-}
-
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.header-content p {
-  margin: 0.25rem 0 0;
-  font-size: 0.85rem;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  gap: 1.25rem;
 }
 
 .coverage-hint {
   color: var(--warning);
-  font-weight: 800;
-  font-size: 0.75rem;
-  background: rgba(var(--warning-rgb), 0.1);
-  padding: 0.1rem 0.5rem;
-  border-radius: 6px;
+  font-weight: 700;
 }
 
-.filter-pills {
-  display: flex;
-  gap: 0.5rem;
-  padding: 0.4rem;
-  border-radius: 12px;
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-}
-
-.range-pill {
-  padding: 0.4rem 0.8rem;
-  border-radius: 8px;
-  border: none;
-  background: transparent;
-  color: var(--text-mute);
-  font-size: 0.75rem;
-  font-weight: 800;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.range-pill:hover {
-  color: var(--text-main);
-  background: var(--bg-subtle);
-}
-
-.range-pill.active {
-  background: var(--accent);
-  color: #fff;
-  box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.28);
-}
-
-.range-pill.is-partial {
-  opacity: 0.6;
+.page-filter-pill.is-partial {
+  opacity: 0.65;
 }
 
 .health-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 2rem;
+  gap: 1rem;
 }
 
 .chart-section {
-  padding: 1.5rem;
-  border-radius: 24px;
+  padding: 1.25rem;
+  border-radius: var(--radius-2xl);
   border: 1px solid var(--border);
+  background: var(--bg-card);
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.25rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .chart-header {
@@ -608,47 +546,15 @@ onMounted(() => {
   }
 }
 
-@media (max-width: 1024px) {
-  .section-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 1.5rem;
-  }
-  
-  .header-actions {
-    width: 100%;
-    overflow-x: auto;
-    padding-bottom: 0.5rem;
-    -webkit-overflow-scrolling: touch;
-  }
-  
-  .filter-pills {
-    width: max-content;
-  }
-}
-
 @media (max-width: 768px) {
-  .summary-grid {
-    grid-template-columns: repeat(2, 1fr) !important;
-    gap: 1rem !important;
-  }
-  
   .chart-container {
-    height: 300px;
+    height: 280px;
   }
 }
 
 @media (max-width: 480px) {
-  .summary-grid {
-    grid-template-columns: 1fr !important;
-  }
-  
   .chart-container {
-    height: 250px;
-  }
-  
-  .health-container {
-    gap: 1.5rem;
+    height: 240px;
   }
 }
 </style>
