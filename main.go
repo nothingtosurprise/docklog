@@ -69,6 +69,7 @@ type UserClaims struct {
 	AllowedContainers  string `json:"allowed_containers"`
 	IsActive           bool   `json:"is_active"`
 	PasswordVersion    int    `json:"password_version"`
+	TokenType          string `json:"token_type,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -271,20 +272,49 @@ func main() {
 			AllowedContainers:  allowedContainers,
 			IsActive:           isActive,
 			PasswordVersion:    passwordVersion,
-			RegisteredClaims: jwt.RegisteredClaims{
-				ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
-			},
 		}
 
-		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-		t, err := token.SignedString(SECRET_KEY)
+		accessToken, refreshToken, err := issueTokenPair(claims)
 		if err != nil {
 			return err
 		}
 
 		return c.JSON(http.StatusOK, map[string]interface{}{
-			"access_token":     t,
+			"access_token":     accessToken,
+			"refresh_token":    refreshToken,
 			"is_admin":         isAdmin,
+			"password_changed": passwordChanged,
+		})
+	})
+
+	e.POST("/api/token/refresh", func(c echo.Context) error {
+		refreshToken := strings.TrimSpace(c.FormValue("refresh_token"))
+		if refreshToken == "" {
+			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Missing refresh token"})
+		}
+
+		claims, err := validateRefreshToken(refreshToken)
+		if err != nil {
+			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid refresh token"})
+		}
+
+		var passwordChanged bool
+		if err := db.DB.QueryRow(
+			"SELECT password_changed FROM users WHERE id = ?",
+			claims.ID,
+		).Scan(&passwordChanged); err != nil {
+			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "User verification failed"})
+		}
+
+		accessToken, newRefreshToken, err := issueTokenPair(claims)
+		if err != nil {
+			return err
+		}
+
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"access_token":     accessToken,
+			"refresh_token":    newRefreshToken,
+			"is_admin":         claims.IsAdmin,
 			"password_changed": passwordChanged,
 		})
 	})
@@ -344,6 +374,10 @@ func main() {
 			}
 			token := c.Get("user").(*jwt.Token)
 			claims := token.Claims.(*UserClaims)
+
+			if claims.TokenType == tokenTypeRefresh {
+				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid token"})
+			}
 
 			var changed bool
 			if err := refreshClaimsFromDB(claims); err != nil {

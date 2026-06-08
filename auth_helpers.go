@@ -501,6 +501,37 @@ func extractWSToken(r *http.Request) string {
 	return ""
 }
 
+const (
+	tokenTypeAccess  = "access"
+	tokenTypeRefresh = "refresh"
+	accessTokenTTL   = 7 * 24 * time.Hour
+	refreshTokenTTL  = 30 * 24 * time.Hour
+)
+
+func signUserToken(claims *UserClaims, tokenType string, ttl time.Duration) (string, error) {
+	c := *claims
+	c.TokenType = tokenType
+	now := time.Now()
+	c.RegisteredClaims = jwt.RegisteredClaims{
+		ExpiresAt: jwt.NewNumericDate(now.Add(ttl)),
+		IssuedAt:  jwt.NewNumericDate(now),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, &c)
+	return token.SignedString(SECRET_KEY)
+}
+
+func issueTokenPair(claims *UserClaims) (string, string, error) {
+	access, err := signUserToken(claims, tokenTypeAccess, accessTokenTTL)
+	if err != nil {
+		return "", "", err
+	}
+	refresh, err := signUserToken(claims, tokenTypeRefresh, refreshTokenTTL)
+	if err != nil {
+		return "", "", err
+	}
+	return access, refresh, nil
+}
+
 func refreshClaimsFromDB(claims *UserClaims) error {
 	var changed, active, isAdmin, canStart, canStop, canRestart, canDelete, canShell, isRestricted bool
 	var dbPwdVersion int
@@ -552,25 +583,43 @@ func parseUserToken(tokenStr string) (*UserClaims, error) {
 	return token.Claims.(*UserClaims), nil
 }
 
-func validateUserToken(tokenStr string) (*UserClaims, error) {
-	claims, err := parseUserToken(tokenStr)
-	if err != nil {
-		return nil, err
-	}
+func validateUserClaims(claims *UserClaims, requirePasswordChanged bool) (*UserClaims, error) {
 	if err := refreshClaimsFromDB(claims); err != nil {
 		return nil, err
 	}
 
 	var changed bool
-	err = db.DB.QueryRow("SELECT password_changed FROM users WHERE id = ?", claims.ID).Scan(&changed)
+	err := db.DB.QueryRow("SELECT password_changed FROM users WHERE id = ?", claims.ID).Scan(&changed)
 	if err != nil {
 		return nil, err
 	}
-	if !changed {
+	if requirePasswordChanged && !changed {
 		return nil, fmt.Errorf("password change required")
 	}
 
 	return claims, nil
+}
+
+func validateUserToken(tokenStr string) (*UserClaims, error) {
+	claims, err := parseUserToken(tokenStr)
+	if err != nil {
+		return nil, err
+	}
+	if claims.TokenType == tokenTypeRefresh {
+		return nil, fmt.Errorf("invalid token")
+	}
+	return validateUserClaims(claims, true)
+}
+
+func validateRefreshToken(tokenStr string) (*UserClaims, error) {
+	claims, err := parseUserToken(tokenStr)
+	if err != nil {
+		return nil, err
+	}
+	if claims.TokenType != tokenTypeRefresh {
+		return nil, fmt.Errorf("invalid token")
+	}
+	return validateUserClaims(claims, false)
 }
 
 func authenticateWS(c echo.Context) (*UserClaims, error) {
