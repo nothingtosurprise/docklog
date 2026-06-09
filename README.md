@@ -18,11 +18,11 @@
 
 <p align="center">
   <img src="https://img.shields.io/docker/pulls/aimldev/docklog" alt="Docker Pulls">
-  <img src="https://img.shields.io/github/license/docklog-dev/docklog" alt="License">
+  <img src="https://img.shields.io/github/license/dockloghq/docklog" alt="License">
   <img src="https://img.shields.io/badge/version-1.0.0-0891b2" alt="Version">
   <img src="https://img.shields.io/badge/Backend-Go-00add8" alt="Backend">
   <img src="https://img.shields.io/badge/Frontend-Vue--3-42b883" alt="Frontend">
-  <img src="https://img.shields.io/github/stars/Team-AI-ML/docklog?style=social" alt="GitHub Stars">
+  <img src="https://img.shields.io/github/stars/dockloghq/docklog?style=social" alt="GitHub Stars">
 </p>
 
 ---
