@@ -1,5 +1,7 @@
 <template>
   <div class="audit-manager">
+    <div v-if="loadError" class="audit-load-error">{{ loadError }}</div>
+
     <div class="page-toolbar audit-toolbar">
       <div class="search-box">
         <svg
@@ -84,9 +86,9 @@
             <td data-label="Initiator">
               <div class="user-pill">
                 <div class="mini-avatar">
-                  {{ log.username[0].toUpperCase() }}
+                  {{ (log.username || "S")[0].toUpperCase() }}
                 </div>
-                <span class="user-label">{{ log.username }}</span>
+                <span class="user-label">{{ log.username || "system" }}</span>
               </div>
             </td>
             <td data-label="Action">
@@ -98,12 +100,7 @@
               <code class="resource-code">{{ log.resource }}</code>
             </td>
             <td data-label="Status">
-              <div
-                :class="[
-                  'status-indicator',
-                  log.status === 'success' ? 'is-success' : 'is-error',
-                ]"
-              >
+              <div :class="['status-indicator', getStatusClass(log.status)]">
                 <span class="status-dot-mini"></span>
                 {{ log.status }}
               </div>
@@ -248,6 +245,7 @@
 <script setup>
 import { ref, computed, onMounted } from "vue";
 import { apiFetch } from "../utils/apiFetch";
+import { apiErrorMessage, readApiError } from "../utils/authSession";
 
 const props = defineProps({
   token: String,
@@ -257,6 +255,7 @@ const emit = defineEmits(["update-count"]);
 
 const auditLogs = ref([]);
 const loadingLogs = ref(false);
+const loadError = ref("");
 const auditSearch = ref("");
 const showDateModal = ref(false);
 const dateRange = ref({ from: "", to: "" });
@@ -296,8 +295,19 @@ const getActionClass = (action) => {
   return "action-default";
 };
 
+const getStatusClass = (status) => {
+  const normalized = (status || "").toLowerCase();
+  if (normalized === "success") return "is-success";
+  if (normalized === "forbidden") return "is-warning";
+  if (normalized === "error" || normalized === "failure" || normalized === "failed") {
+    return "is-error";
+  }
+  return "is-neutral";
+};
+
 const fetchAuditLogs = async () => {
   loadingLogs.value = true;
+  loadError.value = "";
   try {
     let url = "/api/admin/audit";
     if (dateRange.value.from && dateRange.value.to) {
@@ -305,14 +315,16 @@ const fetchAuditLogs = async () => {
       const to = dateRange.value.to.replace("T", " ") + ":59";
       url += `?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
     }
-    const res = await apiFetch(url, {
-      headers: { Authorization: `Bearer ${props.token}` },
-    });
+    const res = await apiFetch(url);
     if (res.ok) {
       auditLogs.value = await res.json();
       emit("update-count", auditLogs.value.length);
+    } else {
+      const err = await readApiError(res, "Failed to load audit logs");
+      loadError.value = apiErrorMessage(err, "Failed to load audit logs");
     }
   } catch (err) {
+    loadError.value = apiErrorMessage(err, "Failed to load audit logs");
     console.error(err);
   } finally {
     loadingLogs.value = false;
@@ -371,6 +383,16 @@ onMounted(fetchAuditLogs);
 </script>
 
 <style scoped>
+.audit-load-error {
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--error) 35%, transparent);
+  background: color-mix(in srgb, var(--error) 12%, transparent);
+  color: var(--error);
+  font-size: 0.9rem;
+}
+
 /* Toolbar & Search */
 .audit-toolbar {
   display: flex;
@@ -513,6 +535,20 @@ onMounted(fetchAuditLogs);
 .is-error .status-dot-mini {
   background: var(--stop);
   box-shadow: 0 0 8px var(--stop);
+}
+.is-warning {
+  color: var(--warning);
+}
+.is-warning .status-dot-mini {
+  background: var(--warning);
+  box-shadow: 0 0 8px var(--warning);
+}
+.is-neutral {
+  color: var(--text-mute);
+}
+.is-neutral .status-dot-mini {
+  background: var(--text-mute);
+  box-shadow: none;
 }
 
 /* Action Badges */

@@ -1,6 +1,7 @@
 import { reactive } from 'vue';
 import { secureStorage } from './storage';
 import { apiFetch } from './apiFetch';
+import { readApiError } from './authSession';
 
 export function getSystemTheme() {
   if (typeof window === 'undefined') return 'dark';
@@ -123,10 +124,14 @@ export const fetchCurrentUser = async () => {
       return { status: 'ok', user: sharedState.currentUser };
     }
     if (res.status === 403) {
-      sharedState.currentUser = null;
-      secureStorage.removeItem('token');
-      secureStorage.removeItem('user');
-      return { status: 'forbidden', user: null };
+      const err = await readApiError(res, 'Access denied');
+      if (err.code === 'ACCOUNT_DEACTIVATED') {
+        sharedState.currentUser = null;
+        secureStorage.removeItem('token');
+        secureStorage.removeItem('user');
+        return { status: 'forbidden', user: null };
+      }
+      return { status: 'error', user: sharedState.currentUser, error: err.message, code: err.code };
     }
   } catch (e) {
     console.error('Failed to fetch user:', e);

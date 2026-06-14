@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"bytes"
@@ -19,15 +19,15 @@ func captureOutput(fn func()) string {
 	return buf.String()
 }
 
-func TestDispatchCLIVersion(t *testing.T) {
-	exit, code := dispatchCLI([]string{"docklog", "version"})
+func TestDispatchVersion(t *testing.T) {
+	exit, code, _ := Dispatch([]string{"docklog", "version"})
 	if !exit || code != 0 {
 		t.Fatalf("expected exit 0, got exit=%v code=%d", exit, code)
 	}
 }
 
-func TestDispatchCLIUnknownCommand(t *testing.T) {
-	exit, code := dispatchCLI([]string{"docklog", "not-a-command"})
+func TestDispatchUnknownCommand(t *testing.T) {
+	exit, code, _ := Dispatch([]string{"docklog", "not-a-command"})
 	if !exit || code != 1 {
 		t.Fatalf("expected exit 1, got exit=%v code=%d", exit, code)
 	}
@@ -37,28 +37,40 @@ func TestApplyRunModes(t *testing.T) {
 	t.Setenv("DOCKLOG_MODE", "")
 	t.Setenv("DOCKLOG_AGENT_ONLY", "")
 
-	applyRunMode("agent-only")
-	if serveFrontend {
+	var rt Runtime
+	applyRunMode(&rt, "agent-only")
+	if rt.ServeFrontend {
 		t.Fatal("agent-only should not serve frontend")
 	}
 	if os.Getenv("DOCKLOG_AGENT_ONLY") != "true" {
 		t.Fatal("expected DOCKLOG_AGENT_ONLY=true")
 	}
 
-	applyRunMode("agent")
-	if !serveFrontend {
+	applyRunMode(&rt, "agent")
+	if !rt.ServeFrontend {
 		t.Fatal("agent should serve frontend")
 	}
 
-	applyRunMode("server")
-	if !serveFrontend {
+	applyRunMode(&rt, "server")
+	if !rt.ServeFrontend {
 		t.Fatal("server should serve frontend")
 	}
 }
 
 func TestPrintConfig(t *testing.T) {
-	out := captureOutput(printConfig)
+	t.Setenv("DB_PATH", t.TempDir()+"/missing.db")
+	out := captureOutput(func() { PrintConfig(Runtime{Mode: "server"}) })
 	if !bytes.Contains([]byte(out), []byte("DockLog configuration")) {
 		t.Fatalf("unexpected config output: %q", out)
+	}
+}
+
+func TestDispatchServerReturnsRuntime(t *testing.T) {
+	exit, code, rt := Dispatch([]string{"docklog", "server"})
+	if exit || code != 0 {
+		t.Fatalf("expected to continue server, got exit=%v code=%d", exit, code)
+	}
+	if !rt.ServeFrontend || rt.Mode != "server" {
+		t.Fatalf("unexpected runtime: %+v", rt)
 	}
 }

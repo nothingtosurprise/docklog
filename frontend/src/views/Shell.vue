@@ -71,7 +71,7 @@ let reconnectTimer = null;
 let reconnectFailures = 0;
 
 const containerId = computed(() => String(route.query.c || ""));
-const shortId = computed(() => (containerId.value ? containerId.value.slice(0, 12) : "—"));
+const shortId = computed(() => (containerId.value ? containerId.value.slice(0, 12) : "-"));
 
 const container = computed(() =>
   containers.value.find((c) => c.id === containerId.value || c.id.startsWith(containerId.value)),

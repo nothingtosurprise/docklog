@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"os"
@@ -10,11 +10,11 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-func TestResetPasswordCLI(t *testing.T) {
+func TestRunResetPassword(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
 	os.Setenv("DB_PATH", dbPath)
-	defer os.Unsetenv("DB_PATH")
+	t.Cleanup(func() { os.Unsetenv("DB_PATH") })
 
 	if err := db.InitDB(dbPath); err != nil {
 		t.Fatalf("init db: %v", err)
@@ -27,7 +27,7 @@ func TestResetPasswordCLI(t *testing.T) {
 		t.Fatalf("seed user: %v", err)
 	}
 
-	if err := runResetPasswordCLI([]string{"admin", "newpassword1"}); err != nil {
+	if err := RunResetPassword([]string{"admin", "newpassword1"}); err != nil {
 		t.Fatalf("reset password: %v", err)
 	}
 

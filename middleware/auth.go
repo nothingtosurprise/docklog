@@ -1,78 +1,66 @@
-package main
+package middleware
 
 import (
 	"fmt"
 	"log"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"os"
 	"strings"
 	"sync"
 	"time"
 
+	"docklog/config"
 	"docklog/db"
+	"docklog/models"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
 )
 
-const defaultSecretKey = "secret-key-change-this"
+const (
+	ClientHeaderWeb        = "web"
+	HeaderDockLogClient    = "X-DockLog-Client"
+	MinPasswordLength      = 8
+	MaxContainerPatternLen = 256
+	TokenTypeAccess        = "access"
+	TokenTypeRefresh       = "refresh"
+)
+
+var (
+	ClientAccessEnabled bool
+	allowedOrigins      []string
+	LoginRateLimit      loginRateLimiter
+	upgrader            = websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool { return true },
+	}
+)
+
+const (
+	accessTokenTTL  = 7 * 24 * time.Hour
+	refreshTokenTTL = 30 * 24 * time.Hour
+)
 
 type loginRateLimiter struct {
 	mu       sync.Mutex
 	attempts map[string][]time.Time
 }
 
-var loginRateLimit loginRateLimiter
-
-var (
-	ClientAccessEnabled bool
-	allowedOrigins      []string
-	TrustProxy          bool
-)
-
-const (
-	clientHeaderWeb       = "web"
-	headerDockLogClient   = "X-DockLog-Client"
-	minPasswordLength     = 8
-	maxContainerPatternLen = 256
-)
-
-func initSecretKey() {
-	key := os.Getenv("SECRET_KEY")
-	if key == "" {
-		key = defaultSecretKey
-	}
-	SECRET_KEY = []byte(key)
-
-	if AuthDisabled {
-		return
-	}
-	if key == defaultSecretKey {
-		env := os.Getenv("ENV")
-		if env == "production" || os.Getenv("GO_ENV") == "production" {
-			log.Fatalf("SECRET_KEY must be set in production")
-		}
-		log.Println("WARNING: Using default SECRET_KEY. Set the SECRET_KEY environment variable before deploying.")
-	}
+func InitWSUpgrader() {
+	upgrader.CheckOrigin = IsWSAccessAllowed
 }
 
-func initWSUpgrader() {
-	upgrader.CheckOrigin = isWSAccessAllowed
-}
-
-func initClientAccess() {
+func InitClientAccess() {
 	mode := strings.ToLower(strings.TrimSpace(os.Getenv("CLIENT_ACCESS")))
-	ClientAccessEnabled = !AuthDisabled && mode != "off"
+	ClientAccessEnabled = !config.AuthDisabled && mode != "off"
 	allowedOrigins = parseCSVEnv(os.Getenv("ALLOWED_ORIGINS"))
-	TrustProxy = os.Getenv("TRUST_PROXY") == "true"
+	config.TrustProxy = os.Getenv("TRUST_PROXY") == "true"
 
 	if ClientAccessEnabled {
 		log.Println("Client access: strict (Vue web UI origin validation; native mobile clients without browser Origin)")
-		if TrustProxy {
+		if config.TrustProxy {
 			log.Println("TRUST_PROXY enabled: honoring X-Forwarded-Host / X-Forwarded-Proto for origin checks")
 		}
 	}
@@ -98,8 +86,8 @@ func isProduction() bool {
 	return env == "production" || goEnv == "production"
 }
 
-func isPasswordStrongEnough(password string) bool {
-	return len(password) >= minPasswordLength
+func IsPasswordStrongEnough(password string) bool {
+	return len(password) >= MinPasswordLength
 }
 
 func isLocalhostHost(host string) bool {
@@ -111,7 +99,7 @@ func isLocalhostHost(host string) bool {
 }
 
 func requestHost(r *http.Request) string {
-	if TrustProxy {
+	if config.TrustProxy {
 		if host := r.Header.Get("X-Forwarded-Host"); host != "" {
 			return strings.TrimSpace(strings.Split(host, ",")[0])
 		}
@@ -120,7 +108,7 @@ func requestHost(r *http.Request) string {
 }
 
 func requestScheme(r *http.Request) string {
-	if TrustProxy {
+	if config.TrustProxy {
 		if proto := r.Header.Get("X-Forwarded-Proto"); proto != "" {
 			return strings.TrimSpace(strings.Split(proto, ",")[0])
 		}
@@ -135,7 +123,7 @@ func sameOriginURL(r *http.Request) string {
 	return requestScheme(r) + "://" + requestHost(r)
 }
 
-func corsOriginAllowed(origin string) bool {
+func CorsOriginAllowed(origin string) bool {
 	if origin == "" {
 		return false
 	}
@@ -296,13 +284,12 @@ func isWebOriginAllowed(r *http.Request) bool {
 }
 
 func isWebHTTPClientAllowed(r *http.Request) bool {
-	if strings.ToLower(r.Header.Get(headerDockLogClient)) != clientHeaderWeb {
+	if strings.ToLower(r.Header.Get(HeaderDockLogClient)) != ClientHeaderWeb {
 		return false
 	}
 	return isWebOriginAllowed(r)
 }
 
-// isNativeAppRequest matches native mobile clients (e.g. Flutter on Android/iOS) that do not send Origin/Referer.
 func isNativeAppRequest(r *http.Request) bool {
 	if r.Header.Get("Origin") != "" || r.Header.Get("Referer") != "" {
 		return false
@@ -324,7 +311,7 @@ func isClientAccessAllowed(r *http.Request) bool {
 	return isNativeAppRequest(r)
 }
 
-func isWSAccessAllowed(r *http.Request) bool {
+func IsWSAccessAllowed(r *http.Request) bool {
 	if !ClientAccessEnabled {
 		return true
 	}
@@ -334,26 +321,18 @@ func isWSAccessAllowed(r *http.Request) bool {
 	return isNativeAppRequest(r)
 }
 
-func clientAccessConfig() map[string]interface{} {
+func ClientAccessConfig() map[string]interface{} {
 	return map[string]interface{}{
 		"enabled": ClientAccessEnabled,
 		"web": map[string]string{
-			"client_header": headerDockLogClient + "=web",
-			"origin":        "Vue web UI — must match this server or ALLOWED_ORIGINS",
+			"client_header": HeaderDockLogClient + "=web",
+			"origin":        "Vue web UI. Must match this server or ALLOWED_ORIGINS",
 		},
-		"native_mobile": "Flutter app (Android/iOS, com.docklog.app) — no Origin; JWT auth required",
+		"native_mobile": "Flutter app (Android/iOS, com.docklog.app). No Origin; JWT auth required",
 	}
 }
 
-func newTestRequest(method, target string, headers map[string]string) *http.Request {
-	req := httptest.NewRequest(method, target, nil)
-	for key, value := range headers {
-		req.Header.Set(key, value)
-	}
-	return req
-}
-
-func clientAccessMiddleware() echo.MiddlewareFunc {
+func ClientAccessMiddleware() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			if !ClientAccessEnabled {
@@ -367,7 +346,7 @@ func clientAccessMiddleware() echo.MiddlewareFunc {
 				return next(c)
 			}
 			if strings.HasPrefix(path, "/ws") {
-				if !isWSAccessAllowed(c.Request()) {
+				if !IsWSAccessAllowed(c.Request()) {
 					return c.JSON(http.StatusForbidden, map[string]string{
 						"error": "Access denied: WebSocket must originate from the web app or a native client",
 					})
@@ -384,7 +363,7 @@ func clientAccessMiddleware() echo.MiddlewareFunc {
 	}
 }
 
-func (rl *loginRateLimiter) isLimited(key string, max int, window time.Duration) bool {
+func (rl *loginRateLimiter) IsLimited(key string, max int, window time.Duration) bool {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 	if rl.attempts == nil {
@@ -402,7 +381,7 @@ func (rl *loginRateLimiter) isLimited(key string, max int, window time.Duration)
 	return len(recent) >= max
 }
 
-func (rl *loginRateLimiter) recordFailure(key string) {
+func (rl *loginRateLimiter) RecordFailure(key string) {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 	if rl.attempts == nil {
@@ -411,41 +390,41 @@ func (rl *loginRateLimiter) recordFailure(key string) {
 	rl.attempts[key] = append(rl.attempts[key], time.Now())
 }
 
-func (rl *loginRateLimiter) clear(key string) {
+func (rl *loginRateLimiter) Clear(key string) {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 	delete(rl.attempts, key)
 }
 
-func containerActionEnvAllowed(action string) bool {
+func ContainerActionEnvAllowed(action string) bool {
 	switch action {
 	case "start":
-		return CanStart
+		return config.CanStart
 	case "stop":
-		return CanStop
+		return config.CanStop
 	case "restart":
-		return CanRestart
+		return config.CanRestart
 	case "remove":
-		return CanDelete
+		return config.CanDelete
 	default:
 		return false
 	}
 }
 
-func clampStaffActionPermissions(canStart, canStop, canRestart, canDelete, canShell bool) (bool, bool, bool, bool, bool) {
-	if !CanStart {
+func ClampStaffActionPermissions(canStart, canStop, canRestart, canDelete, canShell bool) (bool, bool, bool, bool, bool) {
+	if !config.CanStart {
 		canStart = false
 	}
-	if !CanStop {
+	if !config.CanStop {
 		canStop = false
 	}
-	if !CanRestart {
+	if !config.CanRestart {
 		canRestart = false
 	}
-	if !CanDelete {
+	if !config.CanDelete {
 		canDelete = false
 	}
-	if !AllowShell {
+	if !config.AllowShell {
 		canShell = false
 	}
 	return canStart, canStop, canRestart, canDelete, canShell
@@ -466,7 +445,7 @@ func staffContainerActionQuery(action string) string {
 	}
 }
 
-func staffHasContainerActionPermission(action string, userID int) (bool, error) {
+func StaffHasContainerActionPermission(action string, userID int) (bool, error) {
 	query := staffContainerActionQuery(action)
 	if query == "" {
 		return false, nil
@@ -501,14 +480,7 @@ func extractWSToken(r *http.Request) string {
 	return ""
 }
 
-const (
-	tokenTypeAccess  = "access"
-	tokenTypeRefresh = "refresh"
-	accessTokenTTL   = 7 * 24 * time.Hour
-	refreshTokenTTL  = 30 * 24 * time.Hour
-)
-
-func signUserToken(claims *UserClaims, tokenType string, ttl time.Duration) (string, error) {
+func signUserToken(claims *models.UserClaims, tokenType string, ttl time.Duration) (string, error) {
 	c := *claims
 	c.TokenType = tokenType
 	now := time.Now()
@@ -517,34 +489,34 @@ func signUserToken(claims *UserClaims, tokenType string, ttl time.Duration) (str
 		IssuedAt:  jwt.NewNumericDate(now),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, &c)
-	return token.SignedString(SECRET_KEY)
+	return token.SignedString(config.SecretKey)
 }
 
-func issueTokenPair(claims *UserClaims) (string, string, error) {
-	access, err := signUserToken(claims, tokenTypeAccess, accessTokenTTL)
+func IssueTokenPair(claims *models.UserClaims) (string, string, error) {
+	access, err := signUserToken(claims, TokenTypeAccess, accessTokenTTL)
 	if err != nil {
 		return "", "", err
 	}
-	refresh, err := signUserToken(claims, tokenTypeRefresh, refreshTokenTTL)
+	refresh, err := signUserToken(claims, TokenTypeRefresh, refreshTokenTTL)
 	if err != nil {
 		return "", "", err
 	}
 	return access, refresh, nil
 }
 
-func refreshClaimsFromDB(claims *UserClaims) error {
+func RefreshClaimsFromDB(claims *models.UserClaims) error {
 	var changed, active, isAdmin, canStart, canStop, canRestart, canDelete, canShell, isRestricted bool
 	var dbPwdVersion int
-	var allowedContainers string
+	var allowedContainers, username string
 
 	err := db.DB.QueryRow(
 		`SELECT password_changed, is_active, COALESCE(password_version, 1),
-		 is_admin, can_start, can_stop, can_restart, can_delete, can_shell, is_restricted_access, allowed_containers
+		 is_admin, can_start, can_stop, can_restart, can_delete, can_shell, is_restricted_access, allowed_containers, username
 		 FROM users WHERE id = ?`,
 		claims.ID,
 	).Scan(
 		&changed, &active, &dbPwdVersion,
-		&isAdmin, &canStart, &canStop, &canRestart, &canDelete, &canShell, &isRestricted, &allowedContainers,
+		&isAdmin, &canStart, &canStop, &canRestart, &canDelete, &canShell, &isRestricted, &allowedContainers, &username,
 	)
 	if err != nil {
 		return err
@@ -566,25 +538,28 @@ func refreshClaimsFromDB(claims *UserClaims) error {
 	claims.IsRestrictedAccess = isRestricted
 	claims.AllowedContainers = allowedContainers
 	claims.IsActive = active
+	if strings.TrimSpace(username) != "" {
+		claims.Username = username
+	}
 
 	return nil
 }
 
-func parseUserToken(tokenStr string) (*UserClaims, error) {
-	token, err := jwt.ParseWithClaims(tokenStr, &UserClaims{}, func(token *jwt.Token) (interface{}, error) {
+func parseUserToken(tokenStr string) (*models.UserClaims, error) {
+	token, err := jwt.ParseWithClaims(tokenStr, &models.UserClaims{}, func(token *jwt.Token) (interface{}, error) {
 		if token.Method != jwt.SigningMethodHS256 {
 			return nil, fmt.Errorf("invalid signing method")
 		}
-		return SECRET_KEY, nil
+		return config.SecretKey, nil
 	})
 	if err != nil || !token.Valid {
 		return nil, fmt.Errorf("invalid token")
 	}
-	return token.Claims.(*UserClaims), nil
+	return token.Claims.(*models.UserClaims), nil
 }
 
-func validateUserClaims(claims *UserClaims, requirePasswordChanged bool) (*UserClaims, error) {
-	if err := refreshClaimsFromDB(claims); err != nil {
+func validateUserClaims(claims *models.UserClaims, requirePasswordChanged bool) (*models.UserClaims, error) {
+	if err := RefreshClaimsFromDB(claims); err != nil {
 		return nil, err
 	}
 
@@ -600,31 +575,31 @@ func validateUserClaims(claims *UserClaims, requirePasswordChanged bool) (*UserC
 	return claims, nil
 }
 
-func validateUserToken(tokenStr string) (*UserClaims, error) {
+func validateUserToken(tokenStr string) (*models.UserClaims, error) {
 	claims, err := parseUserToken(tokenStr)
 	if err != nil {
 		return nil, err
 	}
-	if claims.TokenType == tokenTypeRefresh {
+	if claims.TokenType == TokenTypeRefresh {
 		return nil, fmt.Errorf("invalid token")
 	}
 	return validateUserClaims(claims, true)
 }
 
-func validateRefreshToken(tokenStr string) (*UserClaims, error) {
+func ValidateRefreshToken(tokenStr string) (*models.UserClaims, error) {
 	claims, err := parseUserToken(tokenStr)
 	if err != nil {
 		return nil, err
 	}
-	if claims.TokenType != tokenTypeRefresh {
+	if claims.TokenType != TokenTypeRefresh {
 		return nil, fmt.Errorf("invalid token")
 	}
 	return validateUserClaims(claims, false)
 }
 
-func authenticateWS(c echo.Context) (*UserClaims, error) {
-	if AuthDisabled {
-		return &UserClaims{
+func AuthenticateWS(c echo.Context) (*models.UserClaims, error) {
+	if config.AuthDisabled {
+		return &models.UserClaims{
 			ID:                 1,
 			Username:           "admin",
 			IsAdmin:            true,
@@ -640,13 +615,13 @@ func authenticateWS(c echo.Context) (*UserClaims, error) {
 	return validateUserToken(tokenStr)
 }
 
-func upgradeAuthenticatedWS(c echo.Context) (*websocket.Conn, error) {
+func UpgradeAuthenticatedWS(c echo.Context) (*websocket.Conn, error) {
 	responseHeader := http.Header{}
 	responseHeader.Set("Sec-WebSocket-Protocol", "docklog-auth")
 	return upgrader.Upgrade(c.Response(), c.Request(), responseHeader)
 }
 
-func wsAuthError(c echo.Context, err error) error {
+func WSAuthError(c echo.Context, err error) error {
 	msg := "Authentication required"
 	switch err.Error() {
 	case "invalid token", "missing token":
@@ -661,7 +636,7 @@ func wsAuthError(c echo.Context, err error) error {
 	return c.JSON(http.StatusUnauthorized, map[string]string{"error": msg})
 }
 
-func securityHeadersMiddleware() echo.MiddlewareFunc {
+func SecurityHeadersMiddleware() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			h := c.Response().Header()

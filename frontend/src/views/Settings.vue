@@ -66,7 +66,7 @@
         </div>
         <div class="card-body">
           <form @submit.prevent="handlePasswordUpdate" class="settings-form">
-            <div class="input-group">
+            <div class="input-group" v-if="sharedState.currentUser?.password_changed !== false">
               <label>Current password</label>
               <input type="password" v-model="currentPassword" placeholder="Enter current password" class="premium-input" required />
             </div>
@@ -120,7 +120,6 @@
 <script setup>
 import { ref, computed } from "vue";
 import { sharedState, showToast, applyTheme } from "../utils/sharedState";
-import { secureStorage } from "../utils/storage";
 import { apiFetch } from "../utils/apiFetch";
 
 const themeOptions = [
@@ -131,7 +130,7 @@ const themeOptions = [
 
 const themeDescription = computed(() => {
   if (sharedState.themePreference === "auto") {
-    return `Following system — currently ${sharedState.theme}`;
+    return `Following system (${sharedState.theme})`;
   }
   return `Using ${sharedState.themePreference} theme`;
 });
@@ -151,7 +150,12 @@ const handlePasswordUpdate = async () => {
     error.value = "Password must be at least 8 characters";
     return;
   }
-  if (!currentPassword.value) {
+
+  const mustProvideCurrent =
+    sharedState.currentUser?.password_changed !== false &&
+    !sharedState.forcePasswordChange;
+
+  if (mustProvideCurrent && !currentPassword.value) {
     error.value = "Current password is required";
     return;
   }
@@ -160,14 +164,14 @@ const handlePasswordUpdate = async () => {
   error.value = "";
 
   try {
-    const token = secureStorage.getItem("token");
     const formData = new FormData();
     formData.append("password", newPassword.value);
-    formData.append("current_password", currentPassword.value);
+    if (mustProvideCurrent) {
+      formData.append("current_password", currentPassword.value);
+    }
 
     const res = await apiFetch("/api/user/change-password", {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
       body: formData,
     });
 
@@ -176,8 +180,13 @@ const handlePasswordUpdate = async () => {
       newPassword.value = "";
       confirmPassword.value = "";
       currentPassword.value = "";
+      sharedState.forcePasswordChange = false;
+      sharedState.showPasswordModal = false;
+      if (sharedState.currentUser) {
+        sharedState.currentUser.password_changed = true;
+      }
     } else {
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       error.value = data.error || "Failed to update password";
     }
   } catch (err) {

@@ -1,4 +1,4 @@
-package main
+package containers
 
 import (
 	"os"
@@ -7,7 +7,7 @@ import (
 
 var excludedContainerNames []string
 
-func initExcludedContainers() {
+func Init() {
 	raw := strings.TrimSpace(os.Getenv("EXCLUDE_CONTAINERS"))
 	if raw == "" {
 		excludedContainerNames = nil
@@ -33,7 +33,7 @@ func isDockLogSelfContainer(name, image string) bool {
 	return strings.Contains(strings.ToLower(image), "docklog")
 }
 
-func isExcludedContainer(name, image string) bool {
+func IsExcludedContainer(name, image string) bool {
 	if isDockLogSelfContainer(name, image) {
 		return true
 	}
@@ -50,7 +50,7 @@ func isExcludedContainer(name, image string) bool {
 	return false
 }
 
-func sanitizeContainerEnv(env []string) []string {
+func SanitizeContainerEnv(env []string) []string {
 	sanitized := make([]string, len(env))
 	for i, item := range env {
 		parts := strings.SplitN(item, "=", 2)
@@ -78,7 +78,7 @@ func containerNameImageFromInspect(name string, configImage string) (string, str
 	return strings.TrimPrefix(strings.TrimSpace(name), "/"), configImage
 }
 
-func inspectContainerExcluded(name, configImage string) bool {
+func InspectContainerExcluded(name, configImage string) bool {
 	containerName, containerImage := containerNameImageFromInspect(name, configImage)
-	return isExcludedContainer(containerName, containerImage)
+	return IsExcludedContainer(containerName, containerImage)
 }

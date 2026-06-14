@@ -197,6 +197,17 @@
           Audit Logs
         </router-link>
 
+        <router-link
+          v-if="!sharedState.isAuthDisabled && sharedState.currentUser?.is_admin"
+          to="/notifications"
+          class="nav-link"
+          :class="{ active: route.path === '/notifications' }"
+          :data-tooltip="isSidebarCollapsed ? 'Notifications' : null"
+        >
+          <BrandIcon name="notifications" :size="20" :colored="false" />
+          Notifications
+        </router-link>
+
         <div
           class="menu-divider"
           v-if="!sharedState.isAuthDisabled && sharedState.currentUser?.is_admin"
@@ -560,6 +571,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import BrandIcon from "./BrandIcon.vue";
 import {
   sharedState,
   fetchCurrentUser,

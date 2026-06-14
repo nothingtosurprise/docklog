@@ -154,23 +154,23 @@
             </div>
             <div class="kv-item">
               <span class="kv-label">Command</span>
-              <span class="kv-value mono">{{ overview.command || "—" }}</span>
+              <span class="kv-value mono">{{ overview.command || "-" }}</span>
             </div>
             <div class="kv-item">
               <span class="kv-label">Restart policy</span>
-              <span class="kv-value">{{ overview.restartPolicy || "—" }}</span>
+              <span class="kv-value">{{ overview.restartPolicy || "-" }}</span>
             </div>
             <div class="kv-item">
               <span class="kv-label">Platform</span>
-              <span class="kv-value">{{ overview.platform || "—" }}</span>
+              <span class="kv-value">{{ overview.platform || "-" }}</span>
             </div>
             <div class="kv-item">
               <span class="kv-label">Started</span>
-              <span class="kv-value">{{ overview.startedAt || "—" }}</span>
+              <span class="kv-value">{{ overview.startedAt || "-" }}</span>
             </div>
             <div class="kv-item">
               <span class="kv-label">Finished</span>
-              <span class="kv-value">{{ overview.finishedAt || "—" }}</span>
+              <span class="kv-value">{{ overview.finishedAt || "-" }}</span>
             </div>
           </div>
         </article>
@@ -225,9 +225,13 @@
         <div
           v-if="showConfirm"
           class="modal-overlay"
-          @click.self="showConfirm = false"
+          @click.self="closeConfirm"
         >
-          <div class="modal-content shadow-2xl">
+          <div
+            class="modal-content shadow-2xl"
+            :class="{ 'modal-content-working': actionPending }"
+            :aria-busy="actionPending"
+          >
             <div :class="['modal-icon', actionClass]">
               <AppIcon
                 v-if="pendingAction === 'start'"
@@ -255,16 +259,19 @@
               <button
                 type="button"
                 class="modal-btn cancel"
-                @click="showConfirm = false"
+                :disabled="actionPending"
+                @click="closeConfirm"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                :class="['modal-btn confirm', actionClass]"
+                :class="['modal-btn confirm', actionClass, { 'is-working': actionPending }]"
+                :disabled="actionPending"
                 @click="confirmAction"
               >
-                Confirm
+                <span v-if="actionPending" class="btn-spinner" aria-hidden="true"></span>
+                {{ actionPending ? `Working on ${pendingAction}...` : `Confirm ${pendingAction}` }}
               </button>
             </div>
           </div>
@@ -304,8 +311,10 @@ const {
   goToShell,
   showConfirm,
   pendingAction,
+  actionPending,
   actionClass,
   triggerConfirm,
+  closeConfirm,
   executeAction,
   formatDate,
 } = useContainers({ autoPoll: true });
@@ -352,7 +361,7 @@ const overview = computed(() => {
   const cmd = Array.isArray(cfg.Cmd) ? cfg.Cmd.join(" ") : cfg.Cmd;
   return {
     image: cfg.Image,
-    command: cmd || "—",
+    command: cmd || "-",
     restartPolicy: host.RestartPolicy?.Name,
     platform: resolvedInspect.value?.Platform,
     startedAt: formatInspectTime(state.StartedAt),
@@ -397,7 +406,7 @@ const ports = computed(() => {
 });
 
 function formatInspectTime(value) {
-  if (!value || value === "0001-01-01T00:00:00Z") return "—";
+  if (!value || value === "0001-01-01T00:00:00Z") return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString();

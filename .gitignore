@@ -22,6 +22,9 @@ go.work
 # Database
 *.db
 *.db-journal
+*.db-shm
+*.db-wal
+data/
 
 # Frontend
 frontend/node_modules/
@@ -47,7 +50,7 @@ Thumbs.db
 
 .env
 
-# Local / private — not for the public repository
+# Local / private (not for the public repository)
 .env.example
 docs/FLUTTER.md
 docs/examples/

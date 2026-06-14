@@ -47,11 +47,17 @@ const routes = [
     component: () => import('../views/Admin.vue'),
     meta: { requiresAuth: true, requiresAdmin: true, layout: 'main', title: 'Admin Control Center' }
   },
-  { 
-    path: '/audit', 
-    name: 'Audit', 
+  {
+    path: '/audit',
+    name: 'Audit',
     component: () => import('../views/Audit.vue'),
     meta: { requiresAuth: true, requiresAdmin: true, layout: 'main', title: 'Security Audits' }
+  },
+  {
+    path: '/notifications',
+    name: 'Notifications',
+    component: () => import('../views/Notifications.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, layout: 'main', title: 'Notifications' }
   },
   { 
     path: '/settings', 
@@ -122,6 +128,13 @@ router.beforeEach(async (to, from, next) => {
     }
     next('/login');
   } else if (to.meta.requiresAdmin && !isAdmin) {
+    next('/dashboard');
+  } else if (
+    to.meta.requiresAdmin &&
+    sharedState.currentUser?.password_changed === false
+  ) {
+    sharedState.forcePasswordChange = true;
+    sharedState.showPasswordModal = true;
     next('/dashboard');
   } else {
     next();

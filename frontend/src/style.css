@@ -1,7 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
-  /* Core Brand Colors — ocean / dock palette */
+  /* Core Brand Colors (ocean / dock palette) */
   --accent: #0891b2;
   --accent-rgb: 8, 145, 178;
   --accent-hover: #0e7490;
@@ -1041,10 +1041,49 @@ body {
 .modal-btn.confirm.warning { background: var(--warning); box-shadow: 0 8px 20px rgba(var(--warning-rgb), 0.3); }
 .modal-btn.confirm.error { background: var(--error); box-shadow: 0 8px 20px rgba(var(--error-rgb), 0.3); }
 
-.modal-btn:hover {
+.modal-btn:hover:not(:disabled) {
   transform: translateY(-2px);
   filter: brightness(1.1);
 }
+
+.modal-btn:disabled {
+  opacity: 0.72;
+  cursor: not-allowed;
+  transform: none;
+  filter: none;
+}
+
+.modal-btn.confirm.is-working {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+}
+
+.btn-spinner {
+  width: 0.95rem;
+  height: 0.95rem;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: docklog-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+.modal-content-working {
+  pointer-events: none;
+}
+
+.modal-content-working .modal-actions {
+  pointer-events: auto;
+}
+
+@keyframes docklog-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .modal-divider {
   height: 1px;
   background: var(--border);

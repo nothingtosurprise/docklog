@@ -1,20 +1,32 @@
-package main
+package middleware
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
+
+	"docklog/config"
 )
 
 func resetClientAccessState() {
 	ClientAccessEnabled = true
 	allowedOrigins = []string{"https://docklog.example.com"}
-	TrustProxy = false
+	config.TrustProxy = false
+}
+
+func newTestRequest(method, target string, headers map[string]string) *http.Request {
+	req := httptest.NewRequest(method, target, nil)
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
+	return req
 }
 
 func TestWebClientAllowedSameOrigin(t *testing.T) {
 	resetClientAccessState()
 	req := newTestRequest("GET", "http://docklog.local/api/containers", map[string]string{
-		headerDockLogClient: clientHeaderWeb,
+		HeaderDockLogClient: ClientHeaderWeb,
 		"Origin":            "http://docklog.local",
 	})
 	if !isClientAccessAllowed(req) {
@@ -38,7 +50,7 @@ func TestWebClientBlockedForeignOrigin(t *testing.T) {
 	defer os.Unsetenv("ENV")
 
 	req := newTestRequest("GET", "http://docklog.local/api/containers", map[string]string{
-		headerDockLogClient: clientHeaderWeb,
+		HeaderDockLogClient: ClientHeaderWeb,
 		"Origin":            "https://evil.example.com",
 	})
 	if isClientAccessAllowed(req) {
@@ -52,7 +64,7 @@ func TestWebClientAllowedListedOrigin(t *testing.T) {
 	defer os.Unsetenv("ENV")
 
 	req := newTestRequest("GET", "http://docklog.local/api/containers", map[string]string{
-		headerDockLogClient: clientHeaderWeb,
+		HeaderDockLogClient: ClientHeaderWeb,
 		"Origin":            "https://docklog.example.com",
 	})
 	if !isClientAccessAllowed(req) {
@@ -67,7 +79,7 @@ func TestWebClientAllowedHostOnlyOriginEntry(t *testing.T) {
 	defer os.Unsetenv("ENV")
 
 	req := newTestRequest("POST", "http://docklog.example.com/api/token", map[string]string{
-		headerDockLogClient: clientHeaderWeb,
+		HeaderDockLogClient: ClientHeaderWeb,
 		"Origin":            "https://docklog.example.com",
 	})
 	if !isClientAccessAllowed(req) {
@@ -77,9 +89,9 @@ func TestWebClientAllowedHostOnlyOriginEntry(t *testing.T) {
 
 func TestWebClientAllowedViaReverseProxyHost(t *testing.T) {
 	resetClientAccessState()
-	TrustProxy = true
+	config.TrustProxy = true
 	req := newTestRequest("GET", "http://127.0.0.1:8000/api/containers", map[string]string{
-		headerDockLogClient: clientHeaderWeb,
+		HeaderDockLogClient: ClientHeaderWeb,
 		"Origin":            "https://docklog.example.com",
 		"X-Forwarded-Host":  "docklog.example.com",
 		"X-Forwarded-Proto": "https",
@@ -95,7 +107,7 @@ func TestWebClientAllowedWhenOriginHostMatchesWithoutTrustProxy(t *testing.T) {
 	defer os.Unsetenv("ENV")
 
 	req := newTestRequest("POST", "http://docklog.example.com/api/token", map[string]string{
-		headerDockLogClient: clientHeaderWeb,
+		HeaderDockLogClient: ClientHeaderWeb,
 		"Origin":            "https://docklog.example.com",
 	})
 	if !isClientAccessAllowed(req) {
@@ -105,7 +117,7 @@ func TestWebClientAllowedWhenOriginHostMatchesWithoutTrustProxy(t *testing.T) {
 
 func TestForwardHeadersIgnoredWithoutTrustProxy(t *testing.T) {
 	resetClientAccessState()
-	TrustProxy = false
+	config.TrustProxy = false
 	req := newTestRequest("GET", "http://127.0.0.1:8000/api/containers", map[string]string{
 		"X-Forwarded-Host":  "docklog.example.com",
 		"X-Forwarded-Proto": "https",
@@ -125,7 +137,7 @@ func TestSecFetchSiteSameOriginAllowedForConfiguredHost(t *testing.T) {
 	defer os.Unsetenv("ENV")
 
 	req := newTestRequest("POST", "http://docklog.example.com/api/token", map[string]string{
-		headerDockLogClient: clientHeaderWeb,
+		HeaderDockLogClient: ClientHeaderWeb,
 		"Sec-Fetch-Site":    "same-origin",
 	})
 	if !isClientAccessAllowed(req) {
@@ -140,7 +152,7 @@ func TestSecFetchSiteWithoutOriginBlockedWhenHostNotAllowed(t *testing.T) {
 	defer os.Unsetenv("ENV")
 
 	req := newTestRequest("GET", "http://docklog.local/api/containers", map[string]string{
-		headerDockLogClient: clientHeaderWeb,
+		HeaderDockLogClient: ClientHeaderWeb,
 		"Sec-Fetch-Site":    "same-origin",
 	})
 	if isClientAccessAllowed(req) {
@@ -149,34 +161,34 @@ func TestSecFetchSiteWithoutOriginBlockedWhenHostNotAllowed(t *testing.T) {
 }
 
 func TestContainerActionEnvGate(t *testing.T) {
-	CanStart = false
+	config.CanStart = false
 	defer func() {
-		CanStart = false
+		config.CanStart = false
 	}()
 
-	if containerActionEnvAllowed("start") {
+	if ContainerActionEnvAllowed("start") {
 		t.Fatal("expected start to be denied when ALLOW_START is false")
 	}
 
-	CanStart = true
-	if !containerActionEnvAllowed("start") {
+	config.CanStart = true
+	if !ContainerActionEnvAllowed("start") {
 		t.Fatal("expected start to be allowed when ALLOW_START is true")
 	}
 }
 
 func TestClampStaffActionPermissions(t *testing.T) {
-	CanStart = true
-	CanStop = false
-	CanRestart = true
-	CanDelete = false
-	AllowShell = true
+	config.CanStart = true
+	config.CanStop = false
+	config.CanRestart = true
+	config.CanDelete = false
+	config.AllowShell = true
 	defer func() {
-		CanStart = false
-		CanRestart = false
-		AllowShell = false
+		config.CanStart = false
+		config.CanRestart = false
+		config.AllowShell = false
 	}()
 
-	start, stop, restart, del, shell := clampStaffActionPermissions(true, true, true, true, true)
+	start, stop, restart, del, shell := ClampStaffActionPermissions(true, true, true, true, true)
 	if !start || stop || !restart || del || !shell {
 		t.Fatalf("unexpected clamp result: %v %v %v %v %v", start, stop, restart, del, shell)
 	}
@@ -206,7 +218,7 @@ func TestWSWebAllowedByOrigin(t *testing.T) {
 	req := newTestRequest("GET", "http://docklog.local/ws/logs/abc", map[string]string{
 		"Origin": "http://docklog.local",
 	})
-	if !isWSAccessAllowed(req) {
+	if !IsWSAccessAllowed(req) {
 		t.Fatal("expected browser websocket with same origin to be allowed")
 	}
 }
@@ -214,7 +226,7 @@ func TestWSWebAllowedByOrigin(t *testing.T) {
 func TestWSNativeAllowedWithoutOrigin(t *testing.T) {
 	resetClientAccessState()
 	req := newTestRequest("GET", "http://192.168.1.10:8888/ws/logs/abc", nil)
-	if !isWSAccessAllowed(req) {
+	if !IsWSAccessAllowed(req) {
 		t.Fatal("expected native websocket without Origin to be allowed")
 	}
 }
@@ -234,7 +246,7 @@ func TestLocalhostAllowedOutsideProduction(t *testing.T) {
 	os.Unsetenv("GO_ENV")
 
 	req := newTestRequest("GET", "http://localhost:8000/api/config", map[string]string{
-		headerDockLogClient: clientHeaderWeb,
+		HeaderDockLogClient: ClientHeaderWeb,
 		"Origin":            "http://localhost:5173",
 	})
 	if !isClientAccessAllowed(req) {

@@ -228,8 +228,12 @@
     <!-- Unified Action Confirmation Modal -->
     <Teleport to="body">
       <Transition name="fade">
-        <div v-if="showConfirm" class="modal-overlay">
-          <div class="modal-content shadow-2xl">
+        <div v-if="showConfirm" class="modal-overlay" @click.self="closeConfirm">
+          <div
+            class="modal-content shadow-2xl"
+            :class="{ 'modal-content-working': actionPending }"
+            :aria-busy="actionPending"
+          >
             <div :class="['modal-icon', actionClass]">
               <svg v-if="pendingAction === 'start'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
               <svg v-else-if="pendingAction === 'stop'" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2.5"><rect x="6" y="6" width="12" height="12"></rect></svg>
@@ -245,8 +249,23 @@
             </div>
             <div class="modal-divider"></div>
             <div class="modal-actions">
-              <button @click="showConfirm = false" class="modal-btn cancel">Cancel</button>
-              <button @click="executeAction" :class="['modal-btn confirm', actionClass]">Confirm {{ pendingAction }}</button>
+              <button
+                type="button"
+                :disabled="actionPending"
+                @click="closeConfirm"
+                class="modal-btn cancel"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                :disabled="actionPending"
+                @click="executeAction"
+                :class="['modal-btn confirm', actionClass, { 'is-working': actionPending }]"
+              >
+                <span v-if="actionPending" class="btn-spinner" aria-hidden="true"></span>
+                {{ actionPending ? `Working on ${pendingAction}...` : `Confirm ${pendingAction}` }}
+              </button>
             </div>
           </div>
         </div>
@@ -278,8 +297,8 @@ const props = defineProps({
 
 const {
   loading, filteredContainers, activeLiveId, liveStats,
-  showConfirm, pendingAction, actionClass,
-  startLiveStats, stopLiveStats, goToLogs, goToShell, goToDetail, triggerConfirm, executeAction,
+  showConfirm, pendingAction, actionPending, actionClass,
+  startLiveStats, stopLiveStats, goToLogs, goToShell, goToDetail, triggerConfirm, closeConfirm, executeAction,
   formatBytes, formatDate,
 } = useContainers();
 

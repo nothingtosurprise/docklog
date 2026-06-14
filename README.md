@@ -87,11 +87,11 @@ Track administrative actions and security events with a complete audit trail.
 
 Most Docker log viewers are built for a single administrator. DockLog is built for the entire team.
 
-- **Team-First Security** — Wildcard and regex-based RBAC so developers only see the containers they need.
-- **Audit Everything** — Full trail of who started, stopped, or changed containers.
-- **Zero-Config Deployment** — No external database. Single container, embedded Vue UI, SQLite on disk.
-- **Performance Without Compromise** — Go backend with a small memory footprint.
-- **Modern UI** — Responsive dashboard with system/light/dark theme support.
+- **Team-First Security**: Wildcard and regex-based RBAC so developers only see the containers they need.
+- **Audit Everything**: Full trail of who started, stopped, or changed containers.
+- **Zero-Config Deployment**: No external database. Single container, embedded Vue UI, SQLite on disk.
+- **Performance Without Compromise**: Go backend with a small memory footprint.
+- **Modern UI**: Responsive dashboard with system/light/dark theme support.
 
 ---
 
@@ -181,6 +181,17 @@ See [Security & RBAC](docs/SECURITY.md) for details.
 
 The DockLog container itself is **always hidden** (matched by name `docklog` or image containing `docklog`).
 
+### Notifications (Slack, Teams, Discord)
+
+Configure alerts from **Admin → Notifications** in the UI. Webhook URLs are stored in SQLite; there are no environment variables for notification delivery.
+
+- **Master switch** turns delivery on or off for all channels.
+- **Per channel** (Slack, Microsoft Teams, Discord): webhook URL, enable/disable, and event filters.
+- **Event types** (chosen per channel): container actions (start/stop/restart/delete), security events (blocked or failed actions), admin actions (password reset, log export).
+- **Email (SMTP)** is planned; the UI lists it as coming soon.
+
+Legacy env-based webhook URLs are migrated into `notification_channels` on first startup if present.
+
 ### Production checklist
 
 1. Generate and set a strong `SECRET_KEY`:
@@ -198,7 +209,7 @@ The DockLog container itself is **always hidden** (matched by name `docklog` or 
 | Client | How it connects |
 | ------ | --------------- |
 | **Vue web UI** | Served by DockLog; sends `X-DockLog-Client: web` and passes origin checks |
-| **Native mobile app** | Standard JWT after `POST /api/token` — no extra headers published here |
+| **Native mobile app** | Standard JWT after `POST /api/token`; no extra headers published here |
 | **curl / random sites** | Blocked when `CLIENT_ACCESS=strict` |
 
 Set `CLIENT_ACCESS=off` only for local debugging.
@@ -207,9 +218,9 @@ Set `CLIENT_ACCESS=off` only for local debugging.
 
 The official Flutter client supports **Advanced Settings** when adding a server:
 
-- **Resolve Host to IP** — `/etc/hosts`-style override when the URL hostname is not in public DNS
-- **Skip TLS verification** — self-signed certificates
-- **Custom HTTP headers** — Cloudflare Access and similar proxies
+- **Resolve Host to IP**: `/etc/hosts`-style override when the URL hostname is not in public DNS
+- **Skip TLS verification**: self-signed certificates
+- **Custom HTTP headers**: Cloudflare Access and similar proxies
 
 See [`docs/FLUTTER.md`](docs/FLUTTER.md) and the [mobile app documentation](https://docklog.sauravsaini.dev/mobile-app).
 
@@ -394,7 +405,6 @@ Recommended:
 # 🛣️ Roadmap
 
 - Log retention controls
-- Notifications
 - Multi-host support
 - Kubernetes support
 - External authentication providers
@@ -417,7 +427,7 @@ https://hub.docker.com/r/aimldev/docklog
 
 # 🔓 License
 
-MIT License — see [LICENSE](LICENSE).
+MIT License. See [LICENSE](LICENSE).
 
 ---
 

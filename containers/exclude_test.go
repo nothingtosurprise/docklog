@@ -1,4 +1,4 @@
-package main
+package containers
 
 import "testing"
 
@@ -20,16 +20,16 @@ func TestIsDockLogSelfContainer(t *testing.T) {
 func TestIsExcludedContainer(t *testing.T) {
 	excludedContainerNames = []string{"redis", "proxy"}
 
-	if !isExcludedContainer("docklog", "nginx:latest") {
+	if !IsExcludedContainer("docklog", "nginx:latest") {
 		t.Fatal("docklog self must always be excluded")
 	}
-	if !isExcludedContainer("redis", "redis:7") {
+	if !IsExcludedContainer("redis", "redis:7") {
 		t.Fatal("expected redis in exclude list")
 	}
-	if !isExcludedContainer("proxy", "nginx:latest") {
+	if !IsExcludedContainer("proxy", "nginx:latest") {
 		t.Fatal("expected proxy in exclude list")
 	}
-	if isExcludedContainer("api", "node:20") {
+	if IsExcludedContainer("api", "node:20") {
 		t.Fatal("api should not be excluded")
 	}
 }

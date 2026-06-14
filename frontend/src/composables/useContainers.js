@@ -60,6 +60,7 @@ export function useContainers(options = {}) {
   const showConfirm = ref(false);
   const pendingId = ref(null);
   const pendingAction = ref('');
+  const actionPending = ref(false);
 
   const actionClass = computed(() => {
     if (pendingAction.value === 'start') return 'success';
@@ -127,33 +128,54 @@ export function useContainers(options = {}) {
   };
 
   const triggerConfirm = (id, action) => {
+    if (actionPending.value) return;
     pendingId.value = id;
     pendingAction.value = action;
     showConfirm.value = true;
   };
 
+  const closeConfirm = () => {
+    if (actionPending.value) return;
+    showConfirm.value = false;
+  };
+
   const executeAction = async () => {
-    if (!pendingId.value || !pendingAction.value) return;
+    if (!pendingId.value || !pendingAction.value || actionPending.value) return;
+
+    const id = pendingId.value;
+    const action = pendingAction.value;
+    actionPending.value = true;
+
     try {
       const token = secureStorage.getItem('token');
       const formData = new FormData();
-      formData.append('action', pendingAction.value);
-      const res = await apiFetch(`/api/containers/${pendingId.value}/action`, {
+      formData.append('action', action);
+      const res = await apiFetch(`/api/containers/${id}/action`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
       if (res.ok) {
-        showToast('Success', `Action ${pendingAction.value} executed.`, 'success');
+        showToast('Success', `${action} completed for container.`, 'success');
         await fetchContainers();
       } else {
-        showToast('Error', 'Action failed.', 'error');
+        let message = 'Action failed.';
+        try {
+          const body = await res.json();
+          if (body?.error) message = body.error;
+        } catch {
+          // ignore parse errors
+        }
+        showToast('Error', message, 'error');
       }
     } catch (err) {
       console.error(err);
-      showToast('Error', 'Action failed.', 'error');
+      showToast('Error', 'Action failed. Check your connection and try again.', 'error');
     } finally {
+      actionPending.value = false;
       showConfirm.value = false;
+      pendingId.value = null;
+      pendingAction.value = '';
     }
   };
 
@@ -180,6 +202,7 @@ export function useContainers(options = {}) {
     liveStats,
     showConfirm,
     pendingAction,
+    actionPending,
     actionClass,
     fetchContainers,
     startLiveStats,
@@ -188,6 +211,7 @@ export function useContainers(options = {}) {
     goToShell,
     goToDetail,
     triggerConfirm,
+    closeConfirm,
     executeAction,
     formatBytes,
     formatDate: formatContainerDate,

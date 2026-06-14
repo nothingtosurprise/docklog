@@ -32,8 +32,8 @@ The backend translates glob wildcards into anchored regex patterns to prevent ac
 ### 2. Action Rights
 Container actions use the same two-layer model as shell access:
 
-1. **Server env** — the action must be enabled (`ALLOW_START`, `ALLOW_STOP`, `ALLOW_RESTART`, `ALLOW_DELETE`, `ALLOW_SHELL`).
-2. **User DB flags** — every account (including administrators) also needs the matching `can_*` permission.
+1. **Server env**: the action must be enabled (`ALLOW_START`, `ALLOW_STOP`, `ALLOW_RESTART`, `ALLOW_DELETE`, `ALLOW_SHELL`).
+2. **User DB flags**: every account (including administrators) also needs the matching `can_*` permission.
 
 Action flags:
 - `can_start`: Start stopped containers (requires `ALLOW_START=true`).
@@ -58,17 +58,21 @@ Administrators can view these logs directly in the **Admin Panel**.
 
 1.  **Reverse Proxy**: Always run DockLog behind a reverse proxy (Nginx, Traefik, Caddy) to handle SSL/TLS termination.
 2.  **Docker Socket**: Be careful with mounting the Docker socket. Only expose DockLog to trusted networks or use a VPN.
-3.  **Password Policy**: Minimum 8 characters. First login requires a password change. Default credentials are `admin` / `admin123` — change immediately after first login.
+3.  **Password Policy**: Minimum 8 characters. First login requires a password change. Default credentials are `admin` / `admin123`. Change immediately after first login.
 
 ### Emergency password reset (CLI)
 
-If an administrator is locked out, reset the password from the host (do not use `sqlite3` on the live DB — the server holds a write lock):
+If an administrator is locked out, reset the password from the host (do not use `sqlite3` on the live DB; the server holds a write lock):
 
 ```bash
 docker exec docklog docklog reset-password admin 'YourNewPassword123'
 ```
 
 If the database is locked, stop the service and run a one-off container with the same `DB_PATH` volume, then start again.
+
+### Outbound notifications (Slack / Teams)
+
+Admins configure webhooks in the dashboard under **Notifications**. Settings are saved in SQLite.
 
 ## 🌐 Client Access Control
 
@@ -81,14 +85,14 @@ DockLog rejects direct `/api` and `/ws` calls from arbitrary browser origins.
 | WebSocket (Vue UI in browser) | Valid Origin (browsers cannot set custom WS headers) |
 | WebSocket (native mobile app) | No Origin + JWT subprotocol |
 
-The Flutter app (`com.docklog.app`) is **native mobile only** — it is not a web client. Do not use Flutter Web; use the bundled Vue dashboard in the browser.
+The Flutter app (`com.docklog.app`) is **native mobile only**. It is not a web client. Do not use Flutter Web; use the bundled Vue dashboard in the browser.
 
 Environment variables:
 
-- `CLIENT_ACCESS=strict` — default; set `off` only for local debugging
-- `ALLOWED_ORIGINS` — comma-separated extra web origins
-- `TRUST_PROXY=true` — honor `X-Forwarded-Host` / `X-Forwarded-Proto` (only when behind a trusted reverse proxy)
-- `ENV=production` — disables localhost origin bypass
+- `CLIENT_ACCESS=strict`: default; set `off` only for local debugging
+- `ALLOWED_ORIGINS`: comma-separated extra web origins
+- `TRUST_PROXY=true`: honor `X-Forwarded-Host` / `X-Forwarded-Proto` (only when behind a trusted reverse proxy)
+- `ENV=production`: disables localhost origin bypass
 
 DockLog also sends standard security headers (CSP, `X-Frame-Options`, etc.) on all responses.
 

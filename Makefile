@@ -1,4 +1,10 @@
-.PHONY: dev build install clean
+.PHONY: dev build install clean test test-verbose
+
+test:
+	@go test ./...
+
+test-verbose:
+	@go test ./... -v
 
 dev:
 	@echo "Starting development server..."

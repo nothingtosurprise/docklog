@@ -1,33 +1,69 @@
-# Git
+# Version control and CI (not used in image build)
 .git
 .gitignore
+.github
+.cursor
 
-# Go
-bin/
-docklog
-vendor/
-go.work
-
-# Frontend
-node_modules/
-dist/
-frontend/node_modules/
-frontend/dist/
-frontend/.env
-frontend/.env.*
-
-# Database
-*.db
-*.db-journal
-!docklog.db
-
-# Docker
+# Docker / compose (build uses Dockerfile from context metadata, not COPY)
 Dockerfile
 docker-compose.yaml
 .dockerignore
 
-# OS/IDE
+# Local env and secrets
+.env
+.env.*
+
+# OS / editor
 .DS_Store
-.vscode/
-.idea/
+._*
+Thumbs.db
+.vscode
+.idea
 *.swp
+*.swo
+
+# Go build output and tooling
+bin
+docklog
+vendor
+go.work
+go.work.sum
+*.test
+*.out
+coverage
+
+# Go tests (not compiled into the binary)
+**/*_test.go
+
+# Local databases and runtime data
+data
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Docs, marketing assets, and dev scripts (not in runtime image)
+README.md
+LICENSE
+Makefile
+docs
+assets
+scripts
+proto
+
+# Frontend: dependencies and build output are produced inside the image
+node_modules
+frontend/node_modules
+frontend/dist
+frontend/dist-ssr
+frontend/.env
+frontend/.env.*
+
+# Frontend dev-only files (source + lockfile are still copied for pnpm build)
+frontend/README.md
+frontend/.gitignore
+frontend/*.log
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/pnpm-debug.log*

@@ -56,7 +56,7 @@
         </div>
         <div class="stat-content">
           <span class="stat-label">Audit events</span>
-          <span class="stat-value">{{ auditLogsCount || "—" }}</span>
+          <span class="stat-value">{{ auditLogsCount || "-" }}</span>
         </div>
       </div>
 

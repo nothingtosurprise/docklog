@@ -512,6 +512,7 @@ import { ref, computed, onMounted } from "vue";
 import { showToast } from "../utils/sharedState";
 import { sharedState } from "../utils/sharedState";
 import { apiFetch } from "../utils/apiFetch";
+import { apiErrorMessage, readApiError } from "../utils/authSession";
 
 const props = defineProps({
   token: String,
@@ -704,15 +705,17 @@ const closeAllModals = () => {
 
 const fetchStaff = async () => {
   try {
-    const res = await apiFetch("/api/admin/users", {
-      headers: { Authorization: `Bearer ${props.token}` },
-    });
+    const res = await apiFetch("/api/admin/users");
     if (res.ok) {
       const data = await res.json();
       staffUsers.value = data.users || [];
       emit("update-count", nonAdminUsers.value.length);
+    } else {
+      const err = await readApiError(res, "Failed to load users");
+      showToast("Error", apiErrorMessage(err, "Failed to load users"), "error");
     }
   } catch (err) {
+    showToast("Error", apiErrorMessage(err, "Failed to load users"), "error");
     console.error(err);
   }
 };
