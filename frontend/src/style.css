@@ -1372,6 +1372,8 @@ body {
 .page-hero-copy {
   position: relative;
   z-index: 1;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .page-hero-eyebrow {
@@ -1395,8 +1397,9 @@ body {
 .page-hero-sub {
   margin: 0;
   font-size: 0.9rem;
+  line-height: 1.45;
   color: var(--text-dim);
-  max-width: 520px;
+  max-width: 100%;
 }
 
 .page-hero-stats {

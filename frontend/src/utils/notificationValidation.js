@@ -39,7 +39,8 @@ export function validateWebhookUrl(raw, channelType) {
 
   const allowedHosts = WEBHOOK_HOST_HINTS[channelType];
   if (allowedHosts && !allowedHosts.some((host) => hostname === host || hostname.endsWith(`.${host}`))) {
-    const label = channelType === "slack" ? "Slack" : channelType === "teams" ? "Teams" : "Discord";
+    const labels = { slack: "Slack", teams: "Teams", discord: "Discord" };
+    const label = labels[channelType] || channelType;
     return {
       valid: false,
       message: `This does not look like a ${label} webhook URL`,
@@ -72,7 +73,8 @@ export function channelHasAnyEvent(entry) {
     entry.events.notify_container_actions ||
     entry.events.notify_security_events ||
     entry.events.notify_admin_actions ||
-    entry.events.notify_health_events
+    entry.events.notify_health_events ||
+    entry.events.notify_alert_events
   );
 }
 

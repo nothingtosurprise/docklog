@@ -52,6 +52,13 @@ var channelCatalog = []models.NotificationChannelTypeInfo{
 		},
 	},
 	{
+		Type: models.ChannelTypeCustom, Label: "Custom webhook", Description: "HTTPS endpoint (JSON payload)", Available: true,
+		ConfigFields: []models.NotificationChannelField{
+			{Key: "display_name", Label: "Display name", Placeholder: "PagerDuty, n8n, Zapier, etc."},
+			{Key: "webhook_url", Label: "Webhook URL", Secret: true, Placeholder: "https://your-service.example/hooks/docklog"},
+		},
+	},
+	{
 		Type: models.ChannelTypeEmail, Label: "Email", Description: "SMTP delivery (coming soon)", Available: false,
 		ConfigFields: []models.NotificationChannelField{
 			{Key: "smtp_host", Label: "SMTP host", Placeholder: "smtp.example.com"},
@@ -81,6 +88,10 @@ var eventCatalog = []models.NotificationEventTypeInfo{
 		Key: "notify_health_events", Label: "Health check alerts",
 		Description: "Docker HEALTHCHECK failures and recovery",
 	},
+	{
+		Key: "notify_alert_events", Label: "Intelligent alerts",
+		Description: "Rule-based alerts from logs, Docker events, and metrics",
+	},
 }
 
 const (
@@ -88,6 +99,7 @@ const (
 	configKeyNotifySecurity  = "notify_security_events"
 	configKeyNotifyAdmin     = "notify_admin_actions"
 	configKeyNotifyHealth    = "notify_health_events"
+	configKeyNotifyAlerts    = "notify_alert_events"
 )
 
 func (s *NotificationService) Initialize() {
@@ -175,7 +187,7 @@ func (s *NotificationService) UpdateSettings(req models.NotificationsUpdateReque
 		if channelUpdate.Enabled && s.channelIsConfigured(channelUpdate.Type, config) && !eventsFromConfig(config).AnyEnabled() {
 			return models.NotificationsPublicResponse{}, fmt.Errorf("%s: select at least one event type", info.Label)
 		}
-		if err := s.repo.UpsertChannel(channelUpdate.Type, info.Label, channelUpdate.Enabled, config); err != nil {
+		if err := s.repo.UpsertChannel(channelUpdate.Type, channelDisplayName(channelUpdate.Type, info, config), channelUpdate.Enabled, config); err != nil {
 			return models.NotificationsPublicResponse{}, fmt.Errorf("save channel: %w", err)
 		}
 	}
@@ -402,6 +414,20 @@ func (s *NotificationService) activeChannels() []models.NotificationChannel {
 	return active
 }
 
+func (s *NotificationService) ConfiguredChannelIDs() []int64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	ids := make([]int64, 0, len(s.channels))
+	for _, channel := range s.channels {
+		config, err := parseChannelConfig(channel.ConfigJSON)
+		if err != nil || !s.channelIsConfigured(channel.ChannelType, config) {
+			continue
+		}
+		ids = append(ids, channel.ID)
+	}
+	return ids
+}
+
 func eventMatchesChannel(events models.NotificationChannelEvents, event models.AuditNotificationEvent) bool {
 	action := strings.ToLower(strings.TrimSpace(event.Action))
 	status := strings.TrimSpace(event.Status)
@@ -538,6 +564,9 @@ func (s *NotificationService) validateChannelConfig(channelType string, config m
 }
 
 func (s *NotificationService) channelIsConfigured(channelType string, config map[string]string) bool {
+	if channelType == models.ChannelTypeCustom {
+		return strings.TrimSpace(config["webhook_url"]) != ""
+	}
 	info, ok := s.channelTypeInfo(channelType)
 	if !ok {
 		return false
@@ -607,6 +636,11 @@ func (s *NotificationService) deliver(channelType string, config map[string]stri
 			return fmt.Errorf("webhook URL is not configured")
 		}
 		return s.postWebhook(webhookURL, buildDiscordPayload(event))
+	case models.ChannelTypeCustom:
+		if webhookURL == "" {
+			return fmt.Errorf("webhook URL is not configured")
+		}
+		return s.postWebhook(webhookURL, buildCustomPayload(event))
 	default:
 		return fmt.Errorf("channel type %q is not available yet", channelType)
 	}
@@ -660,9 +694,10 @@ func parseChannelConfig(configJSON string) (map[string]string, error) {
 func defaultChannelEvents() models.NotificationChannelEvents {
 	return models.NotificationChannelEvents{
 		NotifyContainerActions: true,
-		NotifySecurityEvents:   true,
-		NotifyAdminActions:     true,
+		NotifySecurityEvents:   false,
+		NotifyAdminActions:     false,
 		NotifyHealthEvents:     false,
+		NotifyAlertEvents:      false,
 	}
 }
 
@@ -683,6 +718,9 @@ func eventsFromConfig(config map[string]string) models.NotificationChannelEvents
 	if value, ok := config[configKeyNotifyHealth]; ok {
 		events.NotifyHealthEvents = parseBoolConfig(value)
 	}
+	if value, ok := config[configKeyNotifyAlerts]; ok {
+		events.NotifyAlertEvents = parseBoolConfig(value)
+	}
 	return events
 }
 
@@ -691,6 +729,7 @@ func applyEventsToConfig(config map[string]string, events models.NotificationCha
 	config[configKeyNotifySecurity] = boolConfigValue(events.NotifySecurityEvents)
 	config[configKeyNotifyAdmin] = boolConfigValue(events.NotifyAdminActions)
 	config[configKeyNotifyHealth] = boolConfigValue(events.NotifyHealthEvents)
+	config[configKeyNotifyAlerts] = boolConfigValue(events.NotifyAlertEvents)
 }
 
 func parseBoolConfig(value string) bool {
@@ -873,5 +912,29 @@ func buildDiscordPayload(event models.AuditNotificationEvent) map[string]interfa
 		"embeds": []map[string]interface{}{{
 			"title": title, "description": desc, "color": colorInt,
 		}},
+	}
+}
+
+func channelDisplayName(channelType string, info models.NotificationChannelTypeInfo, config map[string]string) string {
+	if channelType == models.ChannelTypeCustom {
+		if name := strings.TrimSpace(config["display_name"]); name != "" {
+			return name
+		}
+	}
+	return info.Label
+}
+
+func buildCustomPayload(event models.AuditNotificationEvent) map[string]interface{} {
+	title, _ := notificationPresentation(event)
+	return map[string]interface{}{
+		"type":      "audit",
+		"title":     title,
+		"user":      displayUsername(event.Username),
+		"action":    event.Action,
+		"resource":  event.Resource,
+		"status":    event.Status,
+		"message":   event.Message,
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+		"source":    "docklog",
 	}
 }

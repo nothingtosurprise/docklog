@@ -210,6 +210,19 @@ func (s *Server) registerAdminRoutes(r *echo.Group) {
 	})
 
 	s.registerNotificationRoutes(admin)
+	s.registerAlertRoutes(admin)
+}
+
+func (s *Server) registerAlertRoutes(admin *echo.Group) {
+	if s.deps.Alerts == nil {
+		return
+	}
+	controller := controllers.NewAlertController(
+		s.deps.Alerts,
+		s.auditNotificationSettingsUpdated,
+		s.resolveNotificationSessionUser,
+	)
+	controller.RegisterRoutes(admin)
 }
 
 func (s *Server) registerNotificationRoutes(admin *echo.Group) {

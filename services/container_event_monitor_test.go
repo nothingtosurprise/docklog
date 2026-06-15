@@ -15,7 +15,7 @@ func TestContainerEventTrackerRestartCoalesce(t *testing.T) {
 		mu.Lock()
 		logged = append(logged, username+":"+action+":"+resource+":"+status+":"+message)
 		mu.Unlock()
-	})
+	}, nil)
 
 	containerID := "ed4f4a86a938"
 	name := "api-server"
@@ -53,7 +53,7 @@ func TestContainerEventTrackerStopAfterDelay(t *testing.T) {
 		mu.Lock()
 		logged = append(logged, username+":"+action+":"+resource)
 		mu.Unlock()
-	})
+	}, nil)
 
 	containerID := "abc123def456"
 	tracker.handle(events.Message{
@@ -78,7 +78,7 @@ func TestContainerEventTrackerRestartAction(t *testing.T) {
 		mu.Lock()
 		logged = append(logged, action+":"+resource)
 		mu.Unlock()
-	})
+	}, nil)
 
 	tracker.handle(events.Message{
 		Type:   events.ContainerEventType,

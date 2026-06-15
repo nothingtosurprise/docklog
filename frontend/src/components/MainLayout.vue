@@ -208,6 +208,17 @@
           Notifications
         </router-link>
 
+        <router-link
+          v-if="!sharedState.isAuthDisabled && sharedState.currentUser?.is_admin"
+          to="/alerts"
+          class="nav-link"
+          :class="{ active: route.path === '/alerts' }"
+          :data-tooltip="isSidebarCollapsed ? 'Alerts' : null"
+        >
+          <BrandIcon name="notifications" :size="20" :colored="false" />
+          Alerts
+        </router-link>
+
         <div
           class="menu-divider"
           v-if="!sharedState.isAuthDisabled && sharedState.currentUser?.is_admin"

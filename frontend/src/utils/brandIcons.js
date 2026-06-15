@@ -50,6 +50,15 @@ export const brandIcons = {
       { d: "M7 13h2v2H7v-2zm4 0h6v2h-6v-2z", fill: "#94A3B8" },
     ],
   },
+  webhook: {
+    viewBox: "0 0 24 24",
+    paths: [
+      {
+        d: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15v-4H8l4-7v4h3l-4 7z",
+        fill: "#6366F1",
+      },
+    ],
+  },
   notifications: {
     viewBox: "0 0 24 24",
     paths: [
@@ -65,5 +74,6 @@ export const channelIconMap = {
   slack: "slack",
   teams: "microsoft",
   discord: "discord",
+  custom: "webhook",
   email: "smtp",
 };

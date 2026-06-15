@@ -4,6 +4,7 @@ const (
 	ChannelTypeSlack   = "slack"
 	ChannelTypeTeams   = "teams"
 	ChannelTypeDiscord = "discord"
+	ChannelTypeCustom  = "custom"
 	ChannelTypeEmail   = "email"
 )
 
@@ -20,10 +21,11 @@ type NotificationChannelEvents struct {
 	NotifySecurityEvents   bool `json:"notify_security_events"`
 	NotifyAdminActions     bool `json:"notify_admin_actions"`
 	NotifyHealthEvents     bool `json:"notify_health_events"`
+	NotifyAlertEvents      bool `json:"notify_alert_events"`
 }
 
 func (e NotificationChannelEvents) AnyEnabled() bool {
-	return e.NotifyContainerActions || e.NotifySecurityEvents || e.NotifyAdminActions || e.NotifyHealthEvents
+	return e.NotifyContainerActions || e.NotifySecurityEvents || e.NotifyAdminActions || e.NotifyHealthEvents || e.NotifyAlertEvents
 }
 
 type NotificationChannel struct {

@@ -67,8 +67,10 @@ func (s *Server) Run(rt cli.Runtime) error {
 	}
 
 	stats.StartCollector(s.deps.Docker)
-	services.StartHealthMonitor(s.deps.Docker, audit.Log)
-	services.StartContainerEventMonitor(s.deps.Docker, audit.Log)
+	services.StartHealthMonitor(s.deps.Docker, audit.Log, s.deps.Alerts)
+	services.StartContainerEventMonitor(s.deps.Docker, audit.Log, s.deps.Alerts)
+	services.StartLogAlertMonitor(s.deps.Docker, s.deps.Alerts)
+	services.StartMetricAlertEvaluator(s.deps.Docker, s.deps.Alerts)
 	seed.Admin()
 
 	s.registerAuthRoutes()

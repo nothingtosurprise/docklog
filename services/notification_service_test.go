@@ -286,6 +286,27 @@ func TestDiscordWebhookDelivery(t *testing.T) {
 	}
 }
 
+func TestCustomWebhookDelivery(t *testing.T) {
+	svc := NewNotificationService(repositories.NewNotificationRepository())
+	var received atomic.Bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		received.Store(true)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	err := svc.deliver(models.ChannelTypeCustom, map[string]string{"webhook_url": server.URL}, models.AuditNotificationEvent{
+		Username: "admin", Action: "TEST", Resource: "notifications",
+		Status: "Success", Message: "Test message",
+	})
+	if err != nil {
+		t.Fatalf("delivery failed: %v", err)
+	}
+	if !received.Load() {
+		t.Fatal("expected custom webhook to be called")
+	}
+}
+
 func TestValidateDeliveryReady(t *testing.T) {
 	svc := NewNotificationService(repositories.NewNotificationRepository())
 	svc.mu.Lock()

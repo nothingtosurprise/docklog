@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"log"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -23,15 +24,15 @@ const (
 type ContainerEventLogger func(userID int, username, action, resource, status, message string)
 
 // StartContainerEventMonitor watches Docker lifecycle events and logs host CLI actions.
-func StartContainerEventMonitor(cli *client.Client, onEvent ContainerEventLogger) {
+func StartContainerEventMonitor(cli *client.Client, onEvent ContainerEventLogger, alerts *AlertEngine) {
 	if cli == nil || onEvent == nil {
 		return
 	}
-	go runContainerEventMonitor(cli, onEvent)
+	go runContainerEventMonitor(cli, onEvent, alerts)
 }
 
-func runContainerEventMonitor(cli *client.Client, onEvent ContainerEventLogger) {
-	tracker := newContainerEventTracker(onEvent)
+func runContainerEventMonitor(cli *client.Client, onEvent ContainerEventLogger, alerts *AlertEngine) {
+	tracker := newContainerEventTracker(onEvent, alerts)
 
 	for {
 		ctx := context.Background()
@@ -61,7 +62,8 @@ func runContainerEventMonitor(cli *client.Client, onEvent ContainerEventLogger) 
 }
 
 type containerEventTracker struct {
-	onEvent     ContainerEventLogger
+	onEvent ContainerEventLogger
+	alerts  *AlertEngine
 	mu          sync.Mutex
 	pending     map[string]*pendingContainerStop
 	recentEmits map[string]time.Time
@@ -73,9 +75,10 @@ type pendingContainerStop struct {
 	timer *time.Timer
 }
 
-func newContainerEventTracker(onEvent ContainerEventLogger) *containerEventTracker {
+func newContainerEventTracker(onEvent ContainerEventLogger, alerts *AlertEngine) *containerEventTracker {
 	return &containerEventTracker{
 		onEvent:     onEvent,
+		alerts:      alerts,
 		pending:     make(map[string]*pendingContainerStop),
 		recentEmits: make(map[string]time.Time),
 	}
@@ -106,9 +109,43 @@ func (t *containerEventTracker) handle(msg events.Message) {
 	case "restart":
 		t.clearPending(containerID)
 		t.emit(containerID, "restart", name, "Restarted via Docker host")
+		t.notifyAlerts(containerID, name, image, msg.Actor.Attributes, "restart", 0)
+	case "die":
+		exitCode := eventExitCode(msg)
+		t.notifyAlerts(containerID, name, image, msg.Actor.Attributes, "die", exitCode)
+	case "oom":
+		t.notifyAlerts(containerID, name, image, msg.Actor.Attributes, "oom", 137)
 	case "destroy", "remove":
 		t.clearPending(containerID)
 		t.emit(containerID, "remove", name, "Removed via Docker host")
+	}
+}
+
+func eventExitCode(msg events.Message) int {
+	raw := strings.TrimSpace(msg.Actor.Attributes["exitCode"])
+	if raw == "" {
+		return 1
+	}
+	code, err := strconv.Atoi(raw)
+	if err != nil {
+		return 1
+	}
+	return code
+}
+
+func (t *containerEventTracker) notifyAlerts(containerID, name, image string, attrs map[string]string, action string, exitCode int) {
+	if t.alerts == nil {
+		return
+	}
+	labels := map[string]string{}
+	for key, value := range attrs {
+		if strings.HasPrefix(key, "label.") {
+			labels[strings.TrimPrefix(key, "label.")] = value
+		}
+	}
+	t.alerts.ProcessDockerEvent(containerID, name, image, labels, action, exitCode)
+	if action == "start" || action == "healthy" {
+		t.alerts.EmitRecovery(containerID, name, image, labels, "healthy")
 	}
 }
 
@@ -126,11 +163,13 @@ func (t *containerEventTracker) handleStart(containerID, name, image string) {
 		}
 		t.mu.Unlock()
 		t.emit(containerID, "restart", name, "Restarted via Docker host")
+		t.notifyAlerts(containerID, name, image, map[string]string{}, "restart", 0)
 		return
 	}
 	t.mu.Unlock()
 
 	t.emit(containerID, "start", name, "Started via Docker host")
+	t.notifyAlerts(containerID, name, image, map[string]string{}, "start", 0)
 }
 
 func (t *containerEventTracker) scheduleStop(containerID, name, image string) {
@@ -154,6 +193,7 @@ func (t *containerEventTracker) scheduleStop(containerID, name, image string) {
 		delete(t.pending, containerID)
 		t.mu.Unlock()
 		t.emit(containerID, "stop", name, "Stopped via Docker host")
+		t.notifyAlerts(containerID, name, image, map[string]string{}, "stop", 0)
 	})
 	t.pending[containerID] = entry
 	t.mu.Unlock()

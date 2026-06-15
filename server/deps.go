@@ -17,6 +17,7 @@ type AuditLogger func(userID int, username, action, resource, status, message st
 type Deps struct {
 	Docker        *client.Client
 	Notifications *services.NotificationService
+	Alerts        *services.AlertEngine
 	AuditLogger   AuditLogger
 }
 

@@ -70,6 +70,10 @@ func InitDB(dataSourceName string) error {
 		return err
 	}
 
+	if err := migrateAlertsSchema(); err != nil {
+		return err
+	}
+
 	// Auto-migration: add password_version column for existing databases
 	_, migErr := DB.Exec("ALTER TABLE users ADD COLUMN password_version INTEGER DEFAULT 1")
 	if migErr != nil {

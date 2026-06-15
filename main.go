@@ -34,9 +34,11 @@ func main() {
 
 	initNotificationModule()
 	audit.OnLogged = dispatchAuditNotification
+	initAlertModule()
 
 	srv := server.New(server.Deps{
 		Notifications: notificationService,
+		Alerts:        alertEngine,
 	})
 	if err := srv.Run(appRuntime); err != nil {
 		log.Fatal(err)

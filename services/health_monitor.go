@@ -15,14 +15,14 @@ import (
 type HealthEventLogger func(userID int, username, action, resource, status, message string)
 
 // StartHealthMonitor watches Docker HEALTHCHECK status and logs transitions.
-func StartHealthMonitor(cli *client.Client, onEvent HealthEventLogger) {
+func StartHealthMonitor(cli *client.Client, onEvent HealthEventLogger, alerts *AlertEngine) {
 	if cli == nil || onEvent == nil {
 		return
 	}
-	go runHealthMonitor(cli, onEvent)
+	go runHealthMonitor(cli, onEvent, alerts)
 }
 
-func runHealthMonitor(cli *client.Client, onEvent HealthEventLogger) {
+func runHealthMonitor(cli *client.Client, onEvent HealthEventLogger, alerts *AlertEngine) {
 	known := map[string]string{}
 	var mu sync.Mutex
 
@@ -73,11 +73,18 @@ func runHealthMonitor(cli *client.Client, onEvent HealthEventLogger) {
 				if prev == "healthy" || prev == "starting" {
 					onEvent(0, "system", "health_check_failed", name, "Error",
 						"Docker health check reported unhealthy for "+name)
+					if alerts != nil {
+						alerts.ProcessDockerEvent(id, name, image, containerSummaryLabels(summary), "unhealthy", 0)
+					}
 				}
 			case "healthy":
 				if prev == "unhealthy" {
 					onEvent(0, "system", "health_check_recovered", name, "Success",
 						"Docker health check recovered for "+name)
+					if alerts != nil {
+						alerts.EmitRecovery(id, name, image, containerSummaryLabels(summary), "healthy")
+						alerts.ProcessDockerEvent(id, name, image, containerSummaryLabels(summary), "healthy", 0)
+					}
 				}
 			}
 		}

@@ -11,7 +11,7 @@
             <h1>Notifications</h1>
           </div>
           <p class="page-hero-sub">
-            Route DockLog alerts to Slack, Teams, or Discord. Each channel has its own webhook and event filters.
+            Route DockLog alerts to Slack, Teams, Discord, or any HTTPS webhook. Each channel has its own URL and event filters.
           </p>
         </div>
         <div class="page-hero-stats">
@@ -88,7 +88,7 @@
                 active: activeTab === channelType.type,
                 [channelStatus(channelType)]: true,
               }"
-              @click="activeTab = channelType.type"
+              @click="setActiveChannel(channelType.type)"
             >
               <span class="nav-icon" :class="channelType.type">
                 <ChannelIcon :type="channelType.type" :size="18" />
@@ -122,8 +122,23 @@
             <span class="badge" :class="statusBadgeClass(channelType)">{{ statusLabel(channelType) }}</span>
           </div>
 
+          <div v-if="channelForms[channelType.type]?.clear" class="clear-pending-banner">
+            <span>Webhook will be removed when you save.</span>
+            <button type="button" class="text-link" @click="toggleRemove(channelType.type)">Undo</button>
+          </div>
+
           <div v-if="isConfigured(channelType.type) && !channelForms[channelType.type]?.clear" class="stored-url">
-            <span class="stored-label">Saved webhook</span>
+            <div class="stored-url-head">
+              <span class="stored-label">Saved webhook</span>
+              <button
+                type="button"
+                class="text-link danger"
+                :disabled="clearing || saving"
+                @click="clearWebhookUrl(channelType.type)"
+              >
+                Clear webhook
+              </button>
+            </div>
             <code class="mono">{{ maskedConfig(channelType.type) }}</code>
             <span class="stored-hint">Leave the field empty to keep this URL. Paste a new URL to replace it.</span>
           </div>
@@ -142,9 +157,33 @@
             v-for="field in channelType.config_fields"
             :key="field.key"
             class="input-group"
+            :class="{ 'input-group-inline': field.key === 'webhook_url' }"
           >
             <label :for="`${channelType.type}-${field.key}`">{{ field.label }}</label>
+            <div v-if="field.key === 'webhook_url'" class="webhook-input-row">
+              <input
+                :id="`${channelType.type}-${field.key}`"
+                v-model="channelForms[channelType.type].config[field.key]"
+                :type="field.secret ? 'password' : 'text'"
+                class="premium-input"
+                :class="{ invalid: fieldError(channelType.type, field.key) }"
+                :placeholder="field.placeholder"
+                autocomplete="off"
+                @input="touch()"
+                @blur="markTouched(channelType.type, field.key)"
+              />
+              <button
+                v-if="canClearWebhookInput(channelType.type)"
+                type="button"
+                class="page-btn secondary compact"
+                :disabled="clearing || saving"
+                @click="clearWebhookInput(channelType.type)"
+              >
+                Clear
+              </button>
+            </div>
             <input
+              v-else
               :id="`${channelType.type}-${field.key}`"
               v-model="channelForms[channelType.type].config[field.key]"
               :type="field.secret ? 'password' : 'text'"
@@ -160,37 +199,65 @@
             </p>
           </div>
 
-          <button type="button" class="text-link" @click="openGuideModal(channelType.type)">
+          <p v-if="channelType.type === 'custom'" class="hint custom-webhook-hint">
+            DockLog sends a JSON POST with <code>type</code>, <code>title</code>, and event fields. Use any HTTPS endpoint
+            (PagerDuty, n8n, Zapier, your own service).
+          </p>
+
+          <button
+            v-if="channelType.type !== 'custom'"
+            type="button"
+            class="text-link"
+            @click="openGuideModal(channelType.type)"
+          >
             How to create a {{ channelType.label }} webhook →
           </button>
 
           <div class="event-block">
             <div class="event-block-head">
               <h3>Events for this channel</h3>
-              <button
-                type="button"
-                class="text-link"
-                @click="setAllEvents(channelType.type, true)"
-              >
-                Select all
-              </button>
+              <div class="event-block-actions">
+                <button type="button" class="text-link" @click="setAllEvents(channelType.type, false)">
+                  Clear all
+                </button>
+                <button type="button" class="text-link" @click="setAllEvents(channelType.type, true)">
+                  Select all
+                </button>
+              </div>
             </div>
-            <div class="event-grid">
-              <label
+            <ul class="event-toggle-list">
+              <li
                 v-for="eventType in eventTypes"
                 :key="`${channelType.type}-${eventType.key}`"
-                class="event-card"
-                :class="{ active: channelForms[channelType.type].events[eventType.key] }"
+                class="event-toggle-row"
               >
-                <input
-                  type="checkbox"
-                  v-model="channelForms[channelType.type].events[eventType.key]"
-                  @change="touch()"
-                />
-                <span class="event-card-title">{{ eventType.label }}</span>
-                <span class="event-card-desc">{{ eventType.description }}</span>
-              </label>
-            </div>
+                <div
+                  class="premium-toggle"
+                  :class="{ active: channelForms[channelType.type].events[eventType.key] }"
+                  role="switch"
+                  :aria-checked="channelForms[channelType.type].events[eventType.key]"
+                  tabindex="0"
+                  @click="toggleEvent(channelType.type, eventType.key)"
+                  @keydown.enter.space.prevent="toggleEvent(channelType.type, eventType.key)"
+                >
+                  <div class="toggle-rail">
+                    <div class="toggle-handle"></div>
+                  </div>
+                  <span class="status-label">
+                    {{ channelForms[channelType.type].events[eventType.key] ? "On" : "Off" }}
+                  </span>
+                </div>
+                <div class="event-toggle-copy">
+                  <strong>{{ eventType.label }}</strong>
+                  <span>{{ eventType.description }}</span>
+                </div>
+              </li>
+            </ul>
+            <p v-if="eventTypes.some((e) => e.key === 'notify_alert_events')" class="event-footnote">
+              Intelligent alert rules are managed on the
+              <RouterLink to="/alerts" class="text-link inline">Alerts</RouterLink>
+              page.
+            </p>
             <p v-if="fieldError(channelType.type, 'events')" class="field-error">
               {{ fieldError(channelType.type, "events") }}
             </p>
@@ -206,12 +273,13 @@
               Test {{ channelType.label }}
             </button>
             <button
-              v-if="isConfigured(channelType.type)"
+              v-if="isConfigured(channelType.type) && !channelForms[channelType.type]?.clear"
               type="button"
               class="page-btn danger-outline"
-              @click="toggleRemove(channelType.type)"
+              :disabled="clearing || saving"
+              @click="clearWebhookUrl(channelType.type)"
             >
-              {{ channelForms[channelType.type].clear ? "Undo remove" : "Remove integration" }}
+              Remove integration
             </button>
           </div>
           <p v-if="canTestChannel(channelType.type) && dirty" class="hint warn">
@@ -315,6 +383,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from "vue";
+import { RouterLink, useRoute, useRouter } from "vue-router";
 import BrandIcon from "../components/BrandIcon.vue";
 import ChannelIcon from "../components/ChannelIcon.vue";
 import WebhookSetupGuide from "../components/WebhookSetupGuide.vue";
@@ -332,13 +401,20 @@ import {
 } from "../utils/notificationValidation";
 import { showToast } from "../utils/sharedState";
 
+const route = useRoute();
+const router = useRouter();
+const CHANNEL_QUERY = "channel";
+
 const loading = ref(true);
 const saving = ref(false);
+const clearing = ref(false);
 const testing = ref(false);
 const dirty = ref(false);
 const guideModalOpen = ref(false);
 const guideModalChannel = ref("");
-const activeTab = ref("slack");
+const activeTab = ref(
+  typeof route.query[CHANNEL_QUERY] === "string" ? route.query[CHANNEL_QUERY] : "slack",
+);
 const touchedFields = reactive({});
 
 const guideLabels = {
@@ -368,6 +444,40 @@ const upcomingChannelTypes = computed(() =>
   channelTypes.value.filter((c) => !c.available),
 );
 
+const isValidChannel = (type) =>
+  typeof type === "string" &&
+  availableChannelTypes.value.some((channel) => channel.type === type);
+
+const resolveActiveChannel = (preferred) => {
+  const fromRoute =
+    typeof route.query[CHANNEL_QUERY] === "string" ? route.query[CHANNEL_QUERY] : "";
+  if (preferred && isValidChannel(preferred)) return preferred;
+  if (isValidChannel(fromRoute)) return fromRoute;
+  return availableChannelTypes.value[0]?.type || "slack";
+};
+
+const updateChannelQuery = (type) => {
+  if (!isValidChannel(type) || route.query[CHANNEL_QUERY] === type) return;
+  router.replace({
+    path: route.path,
+    query: { ...route.query, [CHANNEL_QUERY]: type },
+  }).catch(() => {});
+};
+
+const setActiveChannel = (type) => {
+  if (!isValidChannel(type)) return;
+  activeTab.value = type;
+  updateChannelQuery(type);
+};
+
+const syncChannelFromUrl = () => {
+  const fromRoute = route.query[CHANNEL_QUERY];
+  if (typeof fromRoute !== "string" || !isValidChannel(fromRoute)) return;
+  if (activeTab.value !== fromRoute) {
+    activeTab.value = fromRoute;
+  }
+};
+
 const isConfigured = (type) =>
   configuredChannels.value.some((c) => c.type === type && c.configured);
 
@@ -392,9 +502,10 @@ const channelIssues = computed(() => validation.value.issues);
 
 const defaultEvents = () => ({
   notify_container_actions: true,
-  notify_security_events: true,
-  notify_admin_actions: true,
+  notify_security_events: false,
+  notify_admin_actions: false,
   notify_health_events: false,
+  notify_alert_events: false,
 });
 
 const ensureChannelForm = (type) => {
@@ -480,9 +591,10 @@ const resetChannelForms = (data) => {
     entry.config = {};
     entry.events = {
       notify_container_actions: existing?.events?.notify_container_actions ?? true,
-      notify_security_events: existing?.events?.notify_security_events ?? true,
-      notify_admin_actions: existing?.events?.notify_admin_actions ?? true,
+      notify_security_events: existing?.events?.notify_security_events ?? false,
+      notify_admin_actions: existing?.events?.notify_admin_actions ?? false,
       notify_health_events: existing?.events?.notify_health_events ?? false,
+      notify_alert_events: existing?.events?.notify_alert_events ?? false,
     };
     for (const field of channelType.config_fields || []) {
       entry.config[field.key] = "";
@@ -500,6 +612,13 @@ const onChannelEnabledChange = (type) => {
   touch();
 };
 
+const toggleEvent = (type, key) => {
+  const entry = channelForms[type];
+  if (!entry?.events) return;
+  entry.events[key] = !entry.events[key];
+  touch();
+};
+
 const setAllEvents = (type, value) => {
   const entry = channelForms[type];
   if (!entry) return;
@@ -507,6 +626,7 @@ const setAllEvents = (type, value) => {
   entry.events.notify_security_events = value;
   entry.events.notify_admin_actions = value;
   entry.events.notify_health_events = value;
+  entry.events.notify_alert_events = value;
   touch();
 };
 
@@ -527,6 +647,71 @@ const toggleRemove = (type) => {
   touch();
 };
 
+const canClearWebhookInput = (type) => {
+  const entry = channelForms[type];
+  if (!entry || entry.clear) return false;
+  return Boolean((entry.config.webhook_url || "").trim());
+};
+
+const clearWebhookInput = (type) => {
+  const entry = channelForms[type];
+  if (!entry) return;
+  entry.config.webhook_url = "";
+  touch();
+};
+
+const applySettingsResponse = (data) => {
+  const preservedChannel = activeTab.value;
+  channelTypes.value = data.channel_types || [];
+  eventTypes.value = data.event_types || [];
+  configuredChannels.value = data.channels || [];
+  resetChannelForms(data);
+  activeTab.value = resolveActiveChannel(preservedChannel);
+  updateChannelQuery(activeTab.value);
+};
+
+const clearWebhookUrl = async (type) => {
+  const entry = channelForms[type];
+  const channelType = channelTypes.value.find((c) => c.type === type);
+  if (!entry || !channelType) return;
+
+  entry.clear = true;
+  entry.enabled = false;
+  for (const field of channelType.config_fields) {
+    entry.config[field.key] = "";
+  }
+  touch();
+
+  if (!isConfigured(type) && !configuredChannels.value.some((c) => c.type === type)) {
+    entry.clear = false;
+    return;
+  }
+
+  const check = validateNotificationSettings({
+    enabled: form.enabled,
+    channelTypes: channelTypes.value,
+    channelForms,
+    isConfigured,
+  });
+  if (!check.valid) {
+    showToast("Cannot clear", check.issues[0] || "Fix validation errors first", "error");
+    entry.clear = false;
+    return;
+  }
+
+  clearing.value = true;
+  try {
+    const data = await saveNotificationSettings(buildPayload());
+    applySettingsResponse(data);
+    showToast("Webhook cleared", `${channelType.label} integration removed`, "success");
+  } catch (e) {
+    entry.clear = false;
+    showToast("Clear failed", apiErrorMessage(e, "Failed to clear webhook"), "error");
+  } finally {
+    clearing.value = false;
+  }
+};
+
 const loadSettings = async () => {
   loading.value = true;
   try {
@@ -536,9 +721,7 @@ const loadSettings = async () => {
     configuredChannels.value = data.channels || [];
     form.enabled = data.enabled;
     resetChannelForms(data);
-    if (!availableChannelTypes.value.some((c) => c.type === activeTab.value)) {
-      activeTab.value = availableChannelTypes.value[0]?.type || "slack";
-    }
+    activeTab.value = resolveActiveChannel(activeTab.value);
   } catch (e) {
     showToast("Error", apiErrorMessage(e, "Failed to load settings"), "error");
   } finally {
@@ -595,10 +778,7 @@ const saveSettings = async () => {
   saving.value = true;
   try {
     const data = await saveNotificationSettings(buildPayload());
-    channelTypes.value = data.channel_types || [];
-    eventTypes.value = data.event_types || [];
-    configuredChannels.value = data.channels || [];
-    resetChannelForms(data);
+    applySettingsResponse(data);
     showToast("Saved", "Notification settings updated", "success");
   } catch (e) {
     showToast("Save failed", apiErrorMessage(e, "Failed to save settings"), "error");
@@ -635,6 +815,11 @@ const sendTest = async (target) => {
 watch(
   () => form.enabled,
   () => touch(),
+);
+
+watch(
+  () => route.query[CHANNEL_QUERY],
+  () => syncChannelFromUrl(),
 );
 
 onMounted(loadSettings);
@@ -804,6 +989,8 @@ onMounted(loadSettings);
 
 .nav-icon.slack { background: rgba(224, 30, 90, 0.12); }
 .nav-icon.teams { background: rgba(0, 120, 212, 0.12); }
+.nav-icon.discord { background: rgba(88, 101, 242, 0.12); }
+.nav-icon.custom { background: rgba(99, 102, 241, 0.12); }
 .nav-icon.discord { background: rgba(88, 101, 242, 0.12); }
 .nav-icon.email { background: rgba(100, 116, 139, 0.12); }
 
@@ -1020,7 +1207,22 @@ onMounted(loadSettings);
 .editor-icon.slack { background: rgba(224, 30, 90, 0.12); }
 .editor-icon.teams { background: rgba(0, 120, 212, 0.12); }
 .editor-icon.discord { background: rgba(88, 101, 242, 0.12); }
+.editor-icon.custom { background: rgba(99, 102, 241, 0.12); }
 .editor-icon.email { background: rgba(100, 116, 139, 0.12); }
+
+.clear-pending-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0.9rem;
+  margin-bottom: 1rem;
+  border-radius: var(--radius-md);
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  font-size: 0.84rem;
+  color: var(--text-main);
+}
 
 .stored-url {
   display: flex;
@@ -1031,6 +1233,39 @@ onMounted(loadSettings);
   border-radius: var(--radius-md);
   background: var(--bg-input);
   border: 1px solid var(--border);
+}
+
+.stored-url-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.webhook-input-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+.webhook-input-row .premium-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.page-btn.compact {
+  padding: 0.55rem 0.85rem;
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.custom-webhook-hint {
+  margin: 0 0 1rem;
+  line-height: 1.45;
+}
+
+.text-link.danger {
+  color: var(--danger, #ef4444);
 }
 
 .stored-label {
@@ -1127,44 +1362,114 @@ onMounted(loadSettings);
   font-size: 0.95rem;
 }
 
-.event-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+.event-block-actions {
+  display: flex;
+  align-items: center;
   gap: 0.75rem;
 }
 
-.event-card {
+.event-toggle-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  padding: 0.85rem;
+  gap: 0.55rem;
+}
+
+.event-toggle-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.75rem 0.9rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--bg-input);
-  cursor: pointer;
-  position: relative;
 }
 
-.event-card input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
+.event-toggle-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
 }
 
-.event-card.active {
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 8%, var(--bg-input));
+.event-toggle-copy strong {
+  font-size: 0.86rem;
+  font-weight: 800;
+  color: var(--text-main);
 }
 
-.event-card-title {
-  font-size: 0.88rem;
-  font-weight: 700;
-}
-
-.event-card-desc {
+.event-toggle-copy span {
   font-size: 0.76rem;
+  line-height: 1.4;
   color: var(--text-mute);
-  line-height: 1.45;
+}
+
+.event-footnote {
+  margin: 0.75rem 0 0;
+  font-size: 0.8rem;
+  color: var(--text-mute);
+}
+
+.text-link.inline {
+  margin-bottom: 0;
+  display: inline;
+}
+
+.premium-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  cursor: pointer;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.toggle-rail {
+  width: 36px;
+  height: 20px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  position: relative;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.premium-toggle.active .toggle-rail {
+  background: var(--success);
+  border-color: var(--success);
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.2);
+}
+
+.toggle-handle {
+  width: 14px;
+  height: 14px;
+  background: #fff;
+  border-radius: 50%;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.premium-toggle.active .toggle-handle {
+  transform: translateX(16px);
+}
+
+.premium-toggle .status-label {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--text-mute);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  min-width: 1.5rem;
+}
+
+.premium-toggle.active .status-label {
+  color: var(--success);
 }
 
 .editor-actions {
