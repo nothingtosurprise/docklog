@@ -20,6 +20,7 @@ func PrintConfig(rt Runtime) {
 	fmt.Printf("  db_path              %s\n", db.DefaultPath())
 	fmt.Printf("  docker_host          %s\n", envOrDefault("DOCKER_HOST", "unix:///var/run/docker.sock"))
 	fmt.Printf("  disable_auth         %s\n", boolEnv("DISABLE_AUTH", false))
+	fmt.Printf("  debug_mode           %s\n", boolEnv("DEBUG_MODE", false))
 	fmt.Printf("  client_access        %s\n", envOrDefault("CLIENT_ACCESS", "strict"))
 	if excluded := strings.TrimSpace(os.Getenv("EXCLUDE_CONTAINERS")); excluded != "" {
 		fmt.Printf("  exclude_containers     %s\n", excluded)

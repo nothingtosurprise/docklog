@@ -2,13 +2,13 @@ package services
 
 import (
 	"context"
-	"log"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"docklog/audit"
+	"docklog/config"
 	"docklog/containers"
 
 	"github.com/moby/moby/api/types/events"
@@ -51,7 +51,7 @@ func runContainerEventMonitor(cli *client.Client, onEvent ContainerEventLogger, 
 				tracker.handle(msg)
 			case err := <-result.Err:
 				if err != nil {
-					log.Printf("Container events stream ended: %v", err)
+					config.Debugf("Container events stream ended: %v", err)
 				}
 				streamOpen = false
 			}

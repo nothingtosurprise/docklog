@@ -36,7 +36,12 @@ func (s *Server) Run(rt cli.Runtime) error {
 		s.echo.IPExtractor = echo.ExtractIPFromXFFHeader()
 	}
 
-	s.echo.Use(echomiddleware.Logger())
+	if config.DebugMode {
+		s.echo.Use(echomiddleware.Logger())
+		log.Println("Debug mode enabled: verbose debug and HTTP access logs are ON")
+	} else {
+		log.Println("Debug mode disabled: verbose debug and HTTP access logs are OFF")
+	}
 	s.echo.Use(echomiddleware.Recover())
 	s.echo.Use(appmiddleware.SecurityHeadersMiddleware())
 	s.echo.Use(echomiddleware.CORSWithConfig(echomiddleware.CORSConfig{

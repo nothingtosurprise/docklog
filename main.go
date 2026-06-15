@@ -11,6 +11,7 @@ import (
 	"docklog/db"
 	"docklog/middleware"
 	"docklog/server"
+	"docklog/services"
 )
 
 func main() {
@@ -21,6 +22,7 @@ func main() {
 
 	appcli.LogRunMode(appRuntime)
 
+	config.LoadDebugMode()
 	config.LoadAuthDisabled()
 	config.InitSecretKey()
 	config.LoadActionFlags()
@@ -33,6 +35,7 @@ func main() {
 	}
 
 	initNotificationModule()
+	services.StartVersionUpdateMonitor(appcli.Version, notificationService)
 	audit.OnLogged = dispatchAuditNotification
 	initAlertModule()
 

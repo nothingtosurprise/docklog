@@ -17,7 +17,10 @@ services:
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
       - CLIENT_ACCESS=${CLIENT_ACCESS:-strict}
       - TRUST_PROXY=${TRUST_PROXY:-false}
+      - DEBUG_MODE=${DEBUG_MODE:-false}
+      - HOST_PROC=/host/proc
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - /proc:/host/proc:ro
       - ./data:/app/data
     restart: unless-stopped

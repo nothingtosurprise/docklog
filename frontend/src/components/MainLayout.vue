@@ -219,6 +219,25 @@
           Alerts
         </router-link>
 
+        <a
+          href="https://www.docklog.dev/docs"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="nav-link"
+          :data-tooltip="isSidebarCollapsed ? 'Documentation' : null"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+          >
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5V4.5A2.5 2.5 0 0 1 6.5 2z"></path>
+          </svg>
+          Documentation
+        </a>
+
         <div
           class="menu-divider"
           v-if="!sharedState.isAuthDisabled && sharedState.currentUser?.is_admin"

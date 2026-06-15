@@ -74,7 +74,8 @@ export function channelHasAnyEvent(entry) {
     entry.events.notify_security_events ||
     entry.events.notify_admin_actions ||
     entry.events.notify_health_events ||
-    entry.events.notify_alert_events
+    entry.events.notify_alert_events ||
+    entry.events.notify_version_updates
   );
 }
 

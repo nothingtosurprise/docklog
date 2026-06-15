@@ -18,6 +18,7 @@ import (
 var (
 	latestSystemStats map[string]interface{}
 	sysStatsMu        sync.RWMutex
+	cpuSmoothed       float64
 	prevStats         = make(map[string]struct {
 		TotalUsage  uint64
 		SystemUsage uint64
@@ -49,37 +50,76 @@ func StartCollector(cli *client.Client) {
 }
 
 func systemStatsBroadcaster() {
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
+
 	for {
-		v, _ := mem.VirtualMemory()
-		cp, _ := cpu.Percent(500*time.Millisecond, false)
-		cpuVal := 0.0
-		if len(cp) > 0 {
-			cpuVal = cp[0]
-		}
+		updateSystemStatsSnapshot()
+		<-ticker.C
+	}
+}
 
-		cores, err := cpu.Counts(true)
-		if err != nil || cores == 0 {
-			cores = runtime.NumCPU()
-		}
+func updateSystemStatsSnapshot() {
+	v, _ := mem.VirtualMemory()
+	memUsed := v.Used
+	if v.Available > 0 && v.Total > v.Available {
+		memUsed = v.Total - v.Available
+	}
 
-		sysStatsMu.Lock()
-		latestSystemStats = map[string]interface{}{
-			"cpu":          cpuVal,
-			"memory":       v.Used,
-			"total_memory": v.Total,
-			"cores":        cores,
-		}
-		sysStatsMu.Unlock()
+	cpuVal := 0.0
+	if sample, err := sampleCPUPercent(systemSampleInterval); err == nil {
+		cpuVal = smoothCPU(sample)
+	}
 
-		time.Sleep(500 * time.Millisecond)
+	cores, err := cpu.Counts(true)
+	if err != nil || cores == 0 {
+		cores = runtime.NumCPU()
+	}
+
+	sysStatsMu.Lock()
+	latestSystemStats = map[string]interface{}{
+		"cpu":          cpuVal,
+		"memory":       memUsed,
+		"total_memory": v.Total,
+		"cores":        cores,
+	}
+	sysStatsMu.Unlock()
+}
+
+func currentSystemSnapshot() (cpu float64, memory uint64, ok bool) {
+	sysStatsMu.RLock()
+	snapshot := latestSystemStats
+	sysStatsMu.RUnlock()
+	if snapshot == nil {
+		return 0, 0, false
+	}
+	cpu, _ = snapshot["cpu"].(float64)
+	return cpu, numericFromSnapshot(snapshot["memory"]), true
+}
+
+func numericFromSnapshot(value interface{}) uint64 {
+	switch v := value.(type) {
+	case uint64:
+		return v
+	case int:
+		return uint64(v)
+	case int64:
+		return uint64(v)
+	case float64:
+		return uint64(v)
+	default:
+		return 0
 	}
 }
 
 func collectStats(cli *client.Client) {
-	v, _ := mem.VirtualMemory()
-	cp, _ := cpu.Percent(time.Second, false)
-	if len(cp) > 0 {
-		db.DB.Exec("INSERT INTO system_stats (cpu, memory) VALUES (?, ?)", cp[0], v.Used)
+	cpuVal, memUsed, ok := currentSystemSnapshot()
+	if !ok {
+		updateSystemStatsSnapshot()
+		cpuVal, memUsed, _ = currentSystemSnapshot()
+	}
+	if memUsed > 0 || cpuVal > 0 {
+		db.DB.Exec("INSERT INTO system_stats (cpu, memory) VALUES (?, ?)", cpuVal, memUsed)
 	}
 
 	res, _ := cli.ContainerList(context.Background(), client.ContainerListOptions{})

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"docklog/config"
 	"docklog/models"
 	"docklog/repositories"
 )
@@ -272,7 +273,7 @@ func (e *AlertEngine) tryFire(rule models.AlertRule, alert models.AlertNotificat
 		return
 	}
 	if !allowed {
-		log.Printf("Alerts: suppressed %s (%s) reason=%s", rule.RuleKey, alert.Container, reason)
+		config.Debugf("Alerts: suppressed %s (%s) reason=%s", rule.RuleKey, alert.Container, reason)
 		return
 	}
 

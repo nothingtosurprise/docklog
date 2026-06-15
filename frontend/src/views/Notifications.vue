@@ -506,6 +506,7 @@ const defaultEvents = () => ({
   notify_admin_actions: false,
   notify_health_events: false,
   notify_alert_events: false,
+  notify_version_updates: false,
 });
 
 const ensureChannelForm = (type) => {
@@ -595,6 +596,7 @@ const resetChannelForms = (data) => {
       notify_admin_actions: existing?.events?.notify_admin_actions ?? false,
       notify_health_events: existing?.events?.notify_health_events ?? false,
       notify_alert_events: existing?.events?.notify_alert_events ?? false,
+      notify_version_updates: existing?.events?.notify_version_updates ?? false,
     };
     for (const field of channelType.config_fields || []) {
       entry.config[field.key] = "";
@@ -627,6 +629,7 @@ const setAllEvents = (type, value) => {
   entry.events.notify_admin_actions = value;
   entry.events.notify_health_events = value;
   entry.events.notify_alert_events = value;
+  entry.events.notify_version_updates = value;
   touch();
 };
 

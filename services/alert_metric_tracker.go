@@ -12,10 +12,14 @@ type metricBreach struct {
 type metricBreachTracker struct {
 	mu      sync.Mutex
 	entries map[string]metricBreach
+	fired   map[string]bool
 }
 
 func newMetricBreachTracker() *metricBreachTracker {
-	return &metricBreachTracker{entries: make(map[string]metricBreach)}
+	return &metricBreachTracker{
+		entries: make(map[string]metricBreach),
+		fired:   make(map[string]bool),
+	}
 }
 
 func (t *metricBreachTracker) key(ruleKey, container string) string {
@@ -49,4 +53,21 @@ func (t *metricBreachTracker) clear(ruleKey, container string) {
 	t.mu.Lock()
 	delete(t.entries, t.key(ruleKey, container))
 	t.mu.Unlock()
+}
+
+func (t *metricBreachTracker) markFired(ruleKey, container string) {
+	t.mu.Lock()
+	t.fired[t.key(ruleKey, container)] = true
+	t.mu.Unlock()
+}
+
+func (t *metricBreachTracker) consumeRecovery(ruleKey, container string) bool {
+	key := t.key(ruleKey, container)
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if !t.fired[key] {
+		return false
+	}
+	delete(t.fired, key)
+	return true
 }

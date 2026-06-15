@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"docklog/config"
 	"docklog/models"
 	"docklog/repositories"
 )
@@ -92,6 +93,10 @@ var eventCatalog = []models.NotificationEventTypeInfo{
 		Key: "notify_alert_events", Label: "Intelligent alerts",
 		Description: "Rule-based alerts from logs, Docker events, and metrics",
 	},
+	{
+		Key: "notify_version_updates", Label: "Version updates",
+		Description: "A newer DockLog image version is available on Docker Hub",
+	},
 }
 
 const (
@@ -100,6 +105,7 @@ const (
 	configKeyNotifyAdmin     = "notify_admin_actions"
 	configKeyNotifyHealth    = "notify_health_events"
 	configKeyNotifyAlerts    = "notify_alert_events"
+	configKeyNotifyVersion   = "notify_version_updates"
 )
 
 func (s *NotificationService) Initialize() {
@@ -280,7 +286,7 @@ func (s *NotificationService) DispatchAuditEvent(event models.AuditNotificationE
 		return
 	}
 	if !s.deliveryEnabled() {
-		log.Printf("Notifications: delivery off; skipped %s on %s", event.Action, event.Resource)
+		config.Debugf("Notifications: delivery off; skipped %s on %s", event.Action, event.Resource)
 		return
 	}
 	for _, channel := range s.activeChannels() {
@@ -448,6 +454,9 @@ func eventMatchesChannel(events models.NotificationChannelEvents, event models.A
 	adminActions := map[string]bool{"reset_password": true, "download_logs": true}
 	if adminActions[strings.ToLower(action)] {
 		return events.NotifyAdminActions
+	}
+	if action == "version_update" {
+		return events.NotifyVersionUpdates
 	}
 	healthActions := map[string]bool{"health_check_failed": true, "health_check_recovered": true}
 	if healthActions[action] {
@@ -698,6 +707,7 @@ func defaultChannelEvents() models.NotificationChannelEvents {
 		NotifyAdminActions:     false,
 		NotifyHealthEvents:     false,
 		NotifyAlertEvents:      false,
+		NotifyVersionUpdates:   false,
 	}
 }
 
@@ -721,6 +731,9 @@ func eventsFromConfig(config map[string]string) models.NotificationChannelEvents
 	if value, ok := config[configKeyNotifyAlerts]; ok {
 		events.NotifyAlertEvents = parseBoolConfig(value)
 	}
+	if value, ok := config[configKeyNotifyVersion]; ok {
+		events.NotifyVersionUpdates = parseBoolConfig(value)
+	}
 	return events
 }
 
@@ -730,6 +743,7 @@ func applyEventsToConfig(config map[string]string, events models.NotificationCha
 	config[configKeyNotifyAdmin] = boolConfigValue(events.NotifyAdminActions)
 	config[configKeyNotifyHealth] = boolConfigValue(events.NotifyHealthEvents)
 	config[configKeyNotifyAlerts] = boolConfigValue(events.NotifyAlertEvents)
+	config[configKeyNotifyVersion] = boolConfigValue(events.NotifyVersionUpdates)
 }
 
 func parseBoolConfig(value string) bool {

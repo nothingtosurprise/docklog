@@ -76,21 +76,32 @@ func evaluateMetricRules(cli *client.Client, engine *AlertEngine) {
 				rule.RuleKey, name, breached,
 				time.Duration(cfg.DurationMinutes)*time.Minute, now,
 			)
-			if !fire {
-				if !breached && rule.RecoveryEnabled {
-					engine.metricTracker.clear(rule.RuleKey, name)
+			if fire {
+				engine.Emit(rule, models.AlertNotification{
+					RuleID: rule.RuleKey, Severity: rule.Severity, Container: name,
+					Source: models.AlertSourceMetrics,
+					Message: fmt.Sprintf("%s: %s usage %.1f%% exceeded %.1f%% for %d minutes",
+						rule.Name, cfg.Metric, value, cfg.Threshold, cfg.DurationMinutes),
+					Metadata: map[string]interface{}{cfg.Metric: value, "threshold": cfg.Threshold},
+					URL: "/containers/" + id,
+				})
+				if rule.RecoveryEnabled {
+					engine.metricTracker.markFired(rule.RuleKey, name)
 				}
 				continue
 			}
 
-			engine.Emit(rule, models.AlertNotification{
-				RuleID: rule.RuleKey, Severity: rule.Severity, Container: name,
-				Source: models.AlertSourceMetrics,
-				Message: fmt.Sprintf("%s: %s usage %.1f%% exceeded %.1f%% for %d minutes",
-					rule.Name, cfg.Metric, value, cfg.Threshold, cfg.DurationMinutes),
-				Metadata: map[string]interface{}{cfg.Metric: value, "threshold": cfg.Threshold},
-				URL: "/containers/" + id,
-			})
+			if !breached && rule.RecoveryEnabled && engine.metricTracker.consumeRecovery(rule.RuleKey, name) {
+				engine.suppressor.clearRecovery(rule.RuleKey, name)
+				engine.Emit(rule, models.AlertNotification{
+					RuleID: rule.RuleKey, Severity: rule.Severity, Container: name,
+					Source: models.AlertSourceMetrics, Recovery: true,
+					Message: fmt.Sprintf("%s recovered on %s: %s at %.1f%% (threshold %.1f%%)",
+						rule.Name, name, cfg.Metric, value, cfg.Threshold),
+					Metadata: map[string]interface{}{cfg.Metric: value, "threshold": cfg.Threshold},
+					URL: "/containers/" + id,
+				})
+			}
 		}
 	}
 }

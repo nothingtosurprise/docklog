@@ -171,6 +171,7 @@ See [Security & RBAC](docs/SECURITY.md) for details.
 | `CLIENT_ACCESS` | Restrict `/api` and `/ws` to web UI + native clients (`strict` or `off`) | `strict` |
 | `ALLOWED_ORIGINS` | Extra browser origins for the Vue UI (comma-separated URLs) | _(empty)_ |
 | `TRUST_PROXY` | Honor `X-Forwarded-*` headers when behind a reverse proxy | `false` |
+| `DEBUG_MODE` | Enable verbose internal debug logs in container output | `false` |
 | `ENV` | Set to `production` to disable localhost origin bypass | _(empty)_ |
 | `ALLOW_START` | Allow start action (no-auth mode env flags) | `false` |
 | `ALLOW_STOP` | Allow stop action | `false` |
@@ -187,7 +188,7 @@ Configure alerts from **Admin → Notifications** in the UI. Webhook URLs are st
 
 - **Master switch** turns delivery on or off for all channels.
 - **Per channel** (Slack, Microsoft Teams, Discord): webhook URL, enable/disable, and event filters.
-- **Event types** (chosen per channel): container actions (start/stop/restart/delete), security events (blocked or failed actions), admin actions (password reset, log export).
+- **Event types** (chosen per channel): container actions (start/stop/restart/delete), security events (blocked or failed actions), admin actions (password reset, log export), intelligent alerts, and DockLog version updates.
 - **Email (SMTP)** is planned; the UI lists it as coming soon.
 
 Legacy env-based webhook URLs are migrated into `notification_channels` on first startup if present.

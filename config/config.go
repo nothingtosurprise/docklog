@@ -14,6 +14,7 @@ var (
 	CanRestart   bool
 	CanDelete    bool
 	AllowShell   bool
+	DebugMode    bool
 	SecretKey    []byte
 	TrustProxy   bool
 )
@@ -55,4 +56,15 @@ func LoadActionFlags() {
 
 func LoadAuthDisabled() {
 	AuthDisabled = os.Getenv("DISABLE_AUTH") == "true" || os.Getenv("NO_AUTH") == "true"
+}
+
+func LoadDebugMode() {
+	DebugMode = os.Getenv("DEBUG_MODE") == "true"
+}
+
+func Debugf(format string, args ...interface{}) {
+	if !DebugMode {
+		return
+	}
+	log.Printf("[DEBUG] "+format, args...)
 }

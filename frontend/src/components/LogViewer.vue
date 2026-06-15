@@ -148,36 +148,131 @@
         <Transition name="fade">
           <div v-if="showDownloadModal" class="modal-overlay">
             <div class="modal-content shadow-2xl">
-              <h3>Download Logs</h3>
-              <p class="text-mute">
-                Export buffer for <strong>{{ container.name }}</strong>
-              </p>
-              <div class="format-grid mt-6">
+              <div class="modal-header">
+                <h3>Download Logs</h3>
+                <p class="text-mute">
+                  Export container logs for <strong>{{ container.name }}</strong>
+                </p>
+              </div>
+              
+              <div class="modal-body">
+                <div class="form-group mb-4">
+                  <label class="form-label">Time Range</label>
+                  <div class="select-container">
+                    <select v-model="downloadRangeType" class="premium-input compact select-field">
+                      <option value="all">All Logs</option>
+                      <option value="1h">Last 1 hour</option>
+                      <option value="3h">Last 3 hours</option>
+                      <option value="12h">Last 12 hours</option>
+                      <option value="24h">Last 24 hours</option>
+                      <option value="custom">Custom Date Range</option>
+                    </select>
+                    <div class="select-arrow">
+                      <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+
+                <div v-if="downloadRangeType === 'custom'" class="date-range-fields animate-fade-in mt-4">
+                  <div class="grid grid-cols-2 gap-4">
+                    <div class="form-group">
+                      <label class="form-label-sub">From</label>
+                      <div class="datetime-input-container">
+                        <input
+                          ref="sinceInput"
+                          v-model="downloadSince"
+                          type="datetime-local"
+                          class="premium-input compact datetime-field"
+                        />
+                        <button
+                          type="button"
+                          class="calendar-trigger-btn"
+                          @click="openSincePicker"
+                        >
+                          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="16" y1="2" x2="16" y2="6"></line>
+                            <line x1="8" y1="2" x2="8" y2="6"></line>
+                            <line x1="3" y1="10" x2="21" y2="10"></line>
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label-sub">To</label>
+                      <div class="datetime-input-container">
+                        <input
+                          ref="untilInput"
+                          v-model="downloadUntil"
+                          type="datetime-local"
+                          class="premium-input compact datetime-field"
+                        />
+                        <button
+                          type="button"
+                          class="calendar-trigger-btn"
+                          @click="openUntilPicker"
+                        >
+                          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="16" y1="2" x2="16" y2="6"></line>
+                            <line x1="8" y1="2" x2="8" y2="6"></line>
+                            <line x1="3" y1="10" x2="21" y2="10"></line>
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <p class="text-mute range-hint mt-1">
+                    Dates are parsed in your local time zone.
+                  </p>
+                </div>
+
+                <div class="form-group mt-6">
+                  <label class="form-label">Export Format</label>
+                  <div class="format-selector">
+                    <button
+                      type="button"
+                      :class="['format-tab', { active: downloadFormat === 'log' }]"
+                      @click="downloadFormat = 'log'"
+                    >
+                      Raw Log (.log)
+                    </button>
+                    <button
+                      type="button"
+                      :class="['format-tab', { active: downloadFormat === 'txt' }]"
+                      @click="downloadFormat = 'txt'"
+                    >
+                      Plain Text (.txt)
+                    </button>
+                    <button
+                      type="button"
+                      :class="['format-tab', { active: downloadFormat === 'json' }]"
+                      @click="downloadFormat = 'json'"
+                    >
+                      JSON (.json)
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="modal-divider"></div>
+
+              <div class="modal-actions">
                 <button
-                  @click="downloadLogs('txt')"
-                  class="modal-btn secondary"
+                  @click="showDownloadModal = false"
+                  class="modal-btn cancel"
                 >
-                  TXT
+                  Cancel
                 </button>
                 <button
-                  @click="downloadLogs('json')"
-                  class="modal-btn secondary"
+                  @click="startLogDownload"
+                  class="modal-btn confirm"
                 >
-                  JSON
-                </button>
-                <button
-                  @click="downloadFullLogs"
-                  class="modal-btn confirm full-width mt-2"
-                >
-                  Full History (.log)
+                  Download
                 </button>
               </div>
-              <button
-                @click="showDownloadModal = false"
-                class="modal-btn cancel mt-4"
-              >
-                Close
-              </button>
             </div>
           </div>
         </Transition>
@@ -270,6 +365,24 @@ const logContainer = ref(null);
 const scrollSentinel = ref(null);
 const autoScroll = ref(true);
 const showDownloadModal = ref(false);
+const downloadRangeType = ref("all");
+const downloadFormat = ref("log");
+const downloadSince = ref("");
+const downloadUntil = ref("");
+const sinceInput = ref(null);
+const untilInput = ref(null);
+
+const openSincePicker = () => {
+  if (sinceInput.value && typeof sinceInput.value.showPicker === "function") {
+    sinceInput.value.showPicker();
+  }
+};
+
+const openUntilPicker = () => {
+  if (untilInput.value && typeof untilInput.value.showPicker === "function") {
+    untilInput.value.showPicker();
+  }
+};
 const isFullScreen = ref(false);
 const stats = ref({ cpu: "0.00", memory: "0B / 0B", memPercent: 0 });
 const isLoadingHistory = ref(false);
@@ -488,37 +601,64 @@ const formatBytes = (bytes) => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + sizes[i];
 };
 
-const downloadLogs = (format) => {
-  const rawLogs = logs.value.map((l) => l.replace(/\033\[[0-9;]*m/g, ""));
-  let content =
-    format === "json" ? JSON.stringify(rawLogs, null, 2) : rawLogs.join("\n");
-  const blob = new Blob([content], {
-    type: format === "json" ? "application/json" : "text/plain",
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${props.container.name}_logs.${format}`;
-  a.click();
-  showDownloadModal.value = false;
-};
-
-const downloadFullLogs = async () => {
+const startLogDownload = async () => {
   try {
     const token = secureStorage.getItem("token");
+    const params = new URLSearchParams();
+    
+    if (downloadRangeType.value === "custom") {
+      const sinceDate = downloadSince.value ? new Date(downloadSince.value) : null;
+      const untilDate = downloadUntil.value ? new Date(downloadUntil.value) : null;
+      if (sinceDate && !Number.isNaN(sinceDate.getTime())) {
+        params.set("since", sinceDate.toISOString());
+      }
+      if (untilDate && !Number.isNaN(untilDate.getTime())) {
+        params.set("until", untilDate.toISOString());
+      }
+    } else if (downloadRangeType.value !== "all") {
+      const hours = parseInt(downloadRangeType.value);
+      if (!Number.isNaN(hours)) {
+        const sinceDate = new Date(Date.now() - hours * 60 * 60 * 1000);
+        params.set("since", sinceDate.toISOString());
+      }
+    }
+    
+    const query = params.toString() ? `?${params.toString()}` : "";
     const res = await apiFetch(
-      `/api/containers/${props.container.id}/logs/download`,
+      `/api/containers/${props.container.id}/logs/download${query}`,
       {
         headers: { Authorization: `Bearer ${token}` },
       },
     );
     if (res.ok) {
-      const blob = await res.blob();
+      const text = await res.text();
+      let blob;
+      let filename = `${props.container.name}_logs.log`;
+      
+      if (downloadFormat.value === "json") {
+        const lines = text.split("\n").filter((l) => l.trim() !== "");
+        blob = new Blob([JSON.stringify(lines, null, 2)], {
+          type: "application/json",
+        });
+        filename = `${props.container.name}_logs.json`;
+      } else if (downloadFormat.value === "txt") {
+        blob = new Blob([text], { type: "text/plain" });
+        filename = `${props.container.name}_logs.txt`;
+      } else {
+        blob = new Blob([text], { type: "text/plain" });
+        filename = `${props.container.name}_logs.log`;
+      }
+      
+      const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = `${props.container.name}_full.log`;
+      a.href = url;
+      a.download = filename;
       a.click();
+      URL.revokeObjectURL(url);
+      
       showDownloadModal.value = false;
+      downloadSince.value = "";
+      downloadUntil.value = "";
     }
   } catch (err) {
     console.error(err);
@@ -1010,5 +1150,136 @@ watch(
   .log-line {
     gap: 0.5rem;
   }
+}
+
+/* Premium modal form elements styling */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  text-align: left;
+}
+.form-label {
+  font-size: 0.72rem;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-mute);
+}
+.form-label-sub {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+.range-selector, .format-selector {
+  display: flex;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.25rem;
+  gap: 0.25rem;
+}
+.range-tab, .format-tab {
+  flex: 1;
+  padding: 0.55rem;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-mute);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.range-tab:hover, .format-tab:hover {
+  color: var(--text-main);
+}
+.range-tab.active, .format-tab.active {
+  background: var(--bg-card);
+  color: var(--text-main);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border);
+}
+.premium-input.compact {
+  padding: 0.55rem 0.85rem;
+  font-size: 0.8rem;
+  border-radius: 10px;
+}
+.grid {
+  display: grid;
+}
+.grid-cols-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.gap-4 {
+  gap: 1rem;
+}
+.mb-4 {
+  margin-bottom: 1rem;
+}
+.range-hint {
+  font-size: 0.68rem;
+  opacity: 0.8;
+}
+
+/* Custom dropdown and calendar-only click controls styling */
+.select-container {
+  position: relative;
+  width: 100%;
+}
+.select-field {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  padding-right: 2.5rem !important;
+  cursor: pointer;
+}
+.select-arrow {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-mute);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+}
+.datetime-input-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+.datetime-field {
+  padding-right: 2.25rem !important;
+}
+/* Disable opening picker by clicking text area, styling only indicator */
+.datetime-field::-webkit-calendar-picker-indicator {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: default;
+  pointer-events: none;
+}
+.calendar-trigger-btn {
+  position: absolute;
+  right: 8px;
+  background: transparent;
+  border: none;
+  color: var(--text-mute);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+.calendar-trigger-btn:hover {
+  color: var(--accent);
+  background: var(--bg-subtle);
 }
 </style>

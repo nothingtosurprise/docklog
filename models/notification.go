@@ -22,10 +22,11 @@ type NotificationChannelEvents struct {
 	NotifyAdminActions     bool `json:"notify_admin_actions"`
 	NotifyHealthEvents     bool `json:"notify_health_events"`
 	NotifyAlertEvents      bool `json:"notify_alert_events"`
+	NotifyVersionUpdates   bool `json:"notify_version_updates"`
 }
 
 func (e NotificationChannelEvents) AnyEnabled() bool {
-	return e.NotifyContainerActions || e.NotifySecurityEvents || e.NotifyAdminActions || e.NotifyHealthEvents || e.NotifyAlertEvents
+	return e.NotifyContainerActions || e.NotifySecurityEvents || e.NotifyAdminActions || e.NotifyHealthEvents || e.NotifyAlertEvents || e.NotifyVersionUpdates
 }
 
 type NotificationChannel struct {
