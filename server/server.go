@@ -9,6 +9,7 @@ import (
 	"docklog/audit"
 	"docklog/cli"
 	"docklog/config"
+	appk8s "docklog/k8s"
 	appmiddleware "docklog/middleware"
 	"docklog/seed"
 	"docklog/services"
@@ -63,19 +64,40 @@ func (s *Server) Run(rt cli.Runtime) error {
 	}))
 	s.echo.Use(appmiddleware.ClientAccessMiddleware())
 
-	if s.deps.Docker == nil {
-		cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-		if err != nil {
-			return err
+	if config.DockerEnabled() {
+		if s.deps.Docker == nil {
+			cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+			if err != nil {
+				return err
+			}
+			s.deps.Docker = cli
 		}
-		s.deps.Docker = cli
+
+		stats.StartCollector(s.deps.Docker)
+		services.StartHealthMonitor(s.deps.Docker, audit.Log, s.deps.Alerts)
+		services.StartContainerEventMonitor(s.deps.Docker, audit.Log, s.deps.Alerts)
+		services.StartLogAlertMonitor(s.deps.Docker, s.deps.Alerts)
+		services.StartMetricAlertEvaluator(s.deps.Docker, s.deps.Alerts)
 	}
 
-	stats.StartCollector(s.deps.Docker)
-	services.StartHealthMonitor(s.deps.Docker, audit.Log, s.deps.Alerts)
-	services.StartContainerEventMonitor(s.deps.Docker, audit.Log, s.deps.Alerts)
-	services.StartLogAlertMonitor(s.deps.Docker, s.deps.Alerts)
-	services.StartMetricAlertEvaluator(s.deps.Docker, s.deps.Alerts)
+	if config.KubernetesEnabled() {
+		if s.deps.K8s == nil {
+			k8sClient, err := appk8s.NewClient()
+			if err != nil {
+				config.K8sAvailable = false
+				config.K8sConfigError = err.Error()
+				log.Printf("WARNING: Kubernetes is enabled but unavailable: %v", err)
+			} else {
+				s.deps.K8s = k8sClient
+				config.K8sAvailable = true
+				log.Println("Kubernetes runtime enabled")
+			}
+		}
+		if s.deps.K8s != nil && s.deps.Alerts != nil {
+			config.K8sAvailable = true
+			services.StartK8sEventMonitor(s.deps.K8s, s.deps.Alerts)
+		}
+	}
 	seed.Admin()
 
 	s.registerAuthRoutes()
@@ -83,10 +105,19 @@ func (s *Server) Run(rt cli.Runtime) error {
 
 	api := s.echo.Group("/api")
 	s.setupAPIMiddleware(api)
-	s.registerContainerRoutes(api)
+	if config.DockerEnabled() {
+		s.registerContainerRoutes(api)
+	}
+	if config.KubernetesEnabled() {
+		s.registerK8sRoutes(api)
+		s.registerK8sLogRoutes(api)
+	}
 	s.registerUserRoutes(api)
 	s.registerAdminRoutes(api)
 	s.registerWebSocketRoutes()
+	if config.KubernetesEnabled() {
+		s.registerK8sWebSocketRoutes()
+	}
 
 	if rt.ServeFrontend {
 		s.echo.Use(echomiddleware.StaticWithConfig(echomiddleware.StaticConfig{

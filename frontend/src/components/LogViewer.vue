@@ -9,16 +9,16 @@
   >
     <div :class="['viewer-header', { 'compact-header': compactHeader }]">
       <div class="header-left">
-        <div :class="['status-pulse', `status-${container.state}`]"></div>
+        <div :class="['status-pulse', `status-${resourceState}`]"></div>
         <div class="name-group">
-          <span class="c-name">{{ container.name }}</span>
-          <span class="c-id">{{ container.id.substring(0, 12) }}</span>
+          <span class="c-name">{{ resourceName }}</span>
+          <span class="c-id">{{ resourceSubtitle }}</span>
         </div>
       </div>
 
       <div class="header-right">
         <!-- Live Stats in Header -->
-        <div v-if="container.state === 'running'" class="header-stats-live">
+        <div v-if="!isPod && container.state === 'running'" class="header-stats-live">
           <div class="h-stat">
             <span class="h-label">CPU</span>
             <span
@@ -151,7 +151,7 @@
               <div class="modal-header">
                 <h3>Download Logs</h3>
                 <p class="text-mute">
-                  Export container logs for <strong>{{ container.name }}</strong>
+                  Export logs for <strong>{{ resourceName }}</strong>
                 </p>
               </div>
               
@@ -353,11 +353,55 @@ import { apiFetch } from "../utils/apiFetch";
 
 const props = defineProps({
   container: Object,
+  pod: Object,
   showClose: Boolean,
   compactHeader: Boolean,
 });
 
 const emit = defineEmits(["close", "stats"]);
+
+const isPod = computed(() => !!props.pod);
+const resourceName = computed(() => (isPod.value ? props.pod.name : props.container?.name));
+const resourceSubtitle = computed(() => {
+  if (isPod.value) return `${props.pod.namespace} · pod`;
+  return props.container?.id?.substring(0, 12) || "";
+});
+const resourceState = computed(() => {
+  if (isPod.value) return (props.pod.phase || "unknown").toLowerCase();
+  return props.container?.state || "stopped";
+});
+const resourceKey = computed(() => {
+  if (isPod.value) return `${props.pod.namespace}/${props.pod.name}`;
+  return props.container?.id || "";
+});
+const logsBasePath = computed(() => {
+  if (isPod.value) {
+    return `/api/namespaces/${encodeURIComponent(props.pod.namespace)}/pods/${encodeURIComponent(props.pod.name)}/logs`;
+  }
+  return `/api/containers/${props.container.id}/logs`;
+});
+const logsDownloadPath = computed(() => {
+  if (isPod.value) {
+    return `/api/namespaces/${encodeURIComponent(props.pod.namespace)}/pods/${encodeURIComponent(props.pod.name)}/logs/download`;
+  }
+  return `/api/containers/${props.container.id}/logs/download`;
+});
+const logsCountPath = computed(() => {
+  if (isPod.value) {
+    return `/api/namespaces/${encodeURIComponent(props.pod.namespace)}/pods/${encodeURIComponent(props.pod.name)}/logs/count`;
+  }
+  return `/api/containers/${props.container.id}/logs/count`;
+});
+const wsPath = computed(() => {
+  if (isPod.value) {
+    return `/ws/pod-logs/${encodeURIComponent(props.pod.namespace)}/${encodeURIComponent(props.pod.name)}`;
+  }
+  return `/ws/logs/${props.container.id}`;
+});
+const downloadFilename = computed(() => {
+  if (isPod.value) return `${props.pod.name}_${props.pod.namespace}`;
+  return props.container?.name || "container";
+});
 
 const logs = ref([]);
 const logSearchQuery = ref("");
@@ -484,7 +528,7 @@ const fetchHistoricalLogs = async () => {
   try {
     const token = secureStorage.getItem("token");
     const res = await apiFetch(
-      `/api/containers/${props.container.id}/logs?tail=100&until=${encodeURIComponent(until)}`,
+      `${logsBasePath.value}?tail=100&until=${encodeURIComponent(until)}`,
       {
         headers: { Authorization: `Bearer ${token}` },
       },
@@ -625,7 +669,7 @@ const startLogDownload = async () => {
     
     const query = params.toString() ? `?${params.toString()}` : "";
     const res = await apiFetch(
-      `/api/containers/${props.container.id}/logs/download${query}`,
+      `${logsDownloadPath.value}${query}`,
       {
         headers: { Authorization: `Bearer ${token}` },
       },
@@ -633,20 +677,20 @@ const startLogDownload = async () => {
     if (res.ok) {
       const text = await res.text();
       let blob;
-      let filename = `${props.container.name}_logs.log`;
+      let filename = `${downloadFilename.value}_logs.log`;
       
       if (downloadFormat.value === "json") {
         const lines = text.split("\n").filter((l) => l.trim() !== "");
         blob = new Blob([JSON.stringify(lines, null, 2)], {
           type: "application/json",
         });
-        filename = `${props.container.name}_logs.json`;
+        filename = `${downloadFilename.value}_logs.json`;
       } else if (downloadFormat.value === "txt") {
         blob = new Blob([text], { type: "text/plain" });
-        filename = `${props.container.name}_logs.txt`;
+        filename = `${downloadFilename.value}_logs.txt`;
       } else {
         blob = new Blob([text], { type: "text/plain" });
-        filename = `${props.container.name}_logs.log`;
+        filename = `${downloadFilename.value}_logs.log`;
       }
       
       const url = URL.createObjectURL(blob);
@@ -666,6 +710,7 @@ const startLogDownload = async () => {
 };
 
 const fetchStats = async () => {
+  if (isPod.value || !props.container?.id) return;
   if (statsController) statsController.abort();
   statsController = new AbortController();
   try {
@@ -734,12 +779,9 @@ const fetchStats = async () => {
 const fetchLogCount = async () => {
   try {
     const token = secureStorage.getItem("token");
-    const res = await apiFetch(
-      `/api/containers/${props.container.id}/logs/count`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    );
+    const res = await apiFetch(logsCountPath.value, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     if (res.ok) {
       const data = await res.json();
       totalLogs.value = data.total;
@@ -758,7 +800,7 @@ const connect = () => {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
   }
-  socket = createAuthenticatedWebSocket(`/ws/logs/${props.container.id}`);
+  socket = createAuthenticatedWebSocket(wsPath.value);
   socket.onmessage = (e) => {
     logs.value.push(e.data);
     // Limit buffer to 5000 lines, only prune if auto-scrolling to preserve history exploration
@@ -771,7 +813,7 @@ const connect = () => {
     socket = null;
     if (!viewerMounted) return;
     reconnectTimer = setTimeout(() => {
-      if (viewerMounted && props.container.id) connect();
+      if (viewerMounted && resourceKey.value) connect();
     }, 3000);
   };
 };
@@ -797,7 +839,7 @@ onUnmounted(() => {
   if (observer) observer.disconnect();
 });
 watch(
-  () => props.container.id,
+  () => resourceKey.value,
   () => {
     historyFetchId++;
     lastFetchedUntil = null;

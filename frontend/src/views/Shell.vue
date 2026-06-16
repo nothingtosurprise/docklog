@@ -2,14 +2,14 @@
   <div class="shell-page">
     <header class="shell-toolbar glass">
       <div class="shell-toolbar-left">
-        <router-link to="/containers" class="back-link">
+        <router-link :to="backLink" class="back-link">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3">
             <polyline points="15 18 9 12 15 6"></polyline>
           </svg>
-          <span>Containers</span>
+          <span>{{ isPodShell ? "Kubernetes" : "Containers" }}</span>
         </router-link>
         <div class="shell-title">
-          <h1>{{ containerName || "Container Shell" }}</h1>
+          <h1>{{ shellTitle }}</h1>
           <span class="shell-subtitle">{{ shortId }}</span>
         </div>
       </div>
@@ -71,13 +71,28 @@ let reconnectTimer = null;
 let reconnectFailures = 0;
 
 const containerId = computed(() => String(route.query.c || ""));
-const shortId = computed(() => (containerId.value ? containerId.value.slice(0, 12) : "-"));
+const podRef = computed(() => String(route.query.p || ""));
+const isPodShell = computed(() => podRef.value.includes("/"));
+const podNamespace = computed(() => (isPodShell.value ? podRef.value.split("/")[0] : ""));
+const podName = computed(() => (isPodShell.value ? podRef.value.slice(podNamespace.value.length + 1) : ""));
+const shortId = computed(() => {
+  if (isPodShell.value) return `${podNamespace.value}/${podName.value}`;
+  return containerId.value ? containerId.value.slice(0, 12) : "-";
+});
 
 const container = computed(() =>
   containers.value.find((c) => c.id === containerId.value || c.id.startsWith(containerId.value)),
 );
 
 const containerName = computed(() => container.value?.name || "");
+const shellTitle = computed(() => {
+  if (isPodShell.value) return podName.value ? `${podName.value} shell` : "Pod Shell";
+  return containerName.value || "Container Shell";
+});
+const backLink = computed(() => {
+  if (!isPodShell.value) return "/containers";
+  return { path: "/kubernetes", query: { tab: "pods", namespace: podNamespace.value } };
+});
 
 const statusClass = computed(() => {
   if (isConnected.value) return "is-connected";
@@ -122,7 +137,7 @@ function initTerminal() {
       socket.send(data);
     }
   });
-  terminal.writeln("\x1b[1;36m[DockLog]\x1b[0m Connecting to container shell...");
+  terminal.writeln(`\x1b[1;36m[DockLog]\x1b[0m Connecting to ${isPodShell.value ? "pod" : "container"} shell...`);
 }
 
 function fitTerminal() {
@@ -157,8 +172,12 @@ function scheduleReconnect() {
 }
 
 function connectWebSocket() {
-  if (!containerId.value) {
+  if (!containerId.value && !isPodShell.value) {
     errorMessage.value = "No container selected.";
+    return;
+  }
+  if (isPodShell.value && (!podNamespace.value || !podName.value)) {
+    errorMessage.value = "No pod selected.";
     return;
   }
 
@@ -167,7 +186,7 @@ function connectWebSocket() {
     return;
   }
 
-  if (container.value && container.value.state !== "running") {
+  if (!isPodShell.value && container.value && container.value.state !== "running") {
     errorMessage.value = "Container must be running to open a shell.";
     return;
   }
@@ -182,11 +201,13 @@ function connectWebSocket() {
     initTerminal();
   } else {
     terminal.clear();
-    terminal.writeln("\x1b[1;36m[DockLog]\x1b[0m Connecting to container shell...");
+    terminal.writeln(`\x1b[1;36m[DockLog]\x1b[0m Connecting to ${isPodShell.value ? "pod" : "container"} shell...`);
   }
 
   const shell = encodeURIComponent(selectedShell.value);
-  const path = `/ws/shell/${containerId.value}?shell=${shell}`;
+  const path = isPodShell.value
+    ? `/ws/pod-shell/${encodeURIComponent(podNamespace.value)}/${encodeURIComponent(podName.value)}?shell=${shell}`
+    : `/ws/shell/${containerId.value}?shell=${shell}`;
 
   try {
     socket = createAuthenticatedWebSocket(path);
@@ -256,12 +277,18 @@ watch(
 );
 
 onMounted(async () => {
-  if (!containerId.value) {
+  if (!containerId.value && !isPodShell.value) {
     router.replace("/containers");
     return;
   }
+  if (isPodShell.value && (!podNamespace.value || !podName.value)) {
+    router.replace("/kubernetes");
+    return;
+  }
 
-  await fetchContainers();
+  if (!isPodShell.value) {
+    await fetchContainers();
+  }
 
   if (!userCanShell(sharedState.currentUser)) {
     errorMessage.value = "Shell access is not enabled for your account on this server.";

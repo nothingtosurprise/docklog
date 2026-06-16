@@ -191,9 +191,9 @@ func validateAlertRuleUpsert(input models.AlertRuleUpsert) error {
 		return fmt.Errorf("severity must be info, warning, or critical")
 	}
 	switch input.SourceType {
-	case models.AlertSourceLogs, models.AlertSourceEvents, models.AlertSourceMetrics:
+	case models.AlertSourceLogs, models.AlertSourceEvents, models.AlertSourceMetrics, models.AlertSourceK8sEvents:
 	default:
-		return fmt.Errorf("source type must be logs, events, or metrics")
+		return fmt.Errorf("source type must be logs, events, metrics, or k8s_events")
 	}
 	if input.Enabled && len(input.ChannelIDs) == 0 {
 		return fmt.Errorf("select at least one notification destination")
@@ -224,6 +224,14 @@ func validateAlertRuleUpsert(input models.AlertRuleUpsert) error {
 		}
 		if len(cfg.Events) == 0 {
 			return fmt.Errorf("select at least one docker event")
+		}
+	case models.AlertSourceK8sEvents:
+		cfg, err := decodeEventConfig(input.Config)
+		if err != nil {
+			return err
+		}
+		if len(cfg.Events) == 0 {
+			return fmt.Errorf("select at least one kubernetes event")
 		}
 	case models.AlertSourceMetrics:
 		cfg, err := decodeMetricConfig(input.Config)
@@ -296,6 +304,9 @@ func ruleToPublic(rule models.AlertRule) models.AlertRulePublic {
 	case models.AlertSourceEvents:
 		cfg, _ := parseEventAlertConfig(rule.ConfigJSON)
 		config = cfg
+	case models.AlertSourceK8sEvents:
+		cfg, _ := parseEventAlertConfig(rule.ConfigJSON)
+		config = cfg
 	case models.AlertSourceMetrics:
 		cfg, _ := parseMetricAlertConfig(rule.ConfigJSON)
 		config = cfg
@@ -339,6 +350,9 @@ func mergeAlertRuleUpsert(existing models.AlertRule, input models.AlertRuleUpser
 			cfg, _ := parseLogAlertConfig(existing.ConfigJSON)
 			input.Config = cfg
 		case models.AlertSourceEvents:
+			cfg, _ := parseEventAlertConfig(existing.ConfigJSON)
+			input.Config = cfg
+		case models.AlertSourceK8sEvents:
 			cfg, _ := parseEventAlertConfig(existing.ConfigJSON)
 			input.Config = cfg
 		case models.AlertSourceMetrics:

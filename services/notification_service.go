@@ -72,33 +72,6 @@ var channelCatalog = []models.NotificationChannelTypeInfo{
 	},
 }
 
-var eventCatalog = []models.NotificationEventTypeInfo{
-	{
-		Key: "notify_container_actions", Label: "Container actions",
-		Description: "Successful start, stop, restart, and delete (DockLog UI or docker CLI)",
-	},
-	{
-		Key: "notify_security_events", Label: "Security events",
-		Description: "Blocked or failed container actions",
-	},
-	{
-		Key: "notify_admin_actions", Label: "Admin actions",
-		Description: "Password reset and log export",
-	},
-	{
-		Key: "notify_health_events", Label: "Health check alerts",
-		Description: "Docker HEALTHCHECK failures and recovery",
-	},
-	{
-		Key: "notify_alert_events", Label: "Intelligent alerts",
-		Description: "Rule-based alerts from logs, Docker events, and metrics",
-	},
-	{
-		Key: "notify_version_updates", Label: "Version updates",
-		Description: "A newer DockLog image version is available on Docker Hub",
-	},
-}
-
 const (
 	configKeyNotifyContainer = "notify_container_actions"
 	configKeyNotifySecurity  = "notify_security_events"
@@ -107,6 +80,77 @@ const (
 	configKeyNotifyAlerts    = "notify_alert_events"
 	configKeyNotifyVersion   = "notify_version_updates"
 )
+
+func workloadActionsLabel() string {
+	if config.DockerEnabled() && config.KubernetesEnabled() {
+		return "Workload actions"
+	}
+	if config.KubernetesEnabled() {
+		return "Pod actions"
+	}
+	return "Container actions"
+}
+
+func notificationEventCatalog() []models.NotificationEventTypeInfo {
+	var actionLabel, actionDesc string
+	if config.DockerEnabled() && config.KubernetesEnabled() {
+		actionLabel = "Workload actions"
+		actionDesc = "Successful start, stop, restart, and delete on containers and pods (DockLog UI, docker CLI, or kubectl)"
+	} else if config.KubernetesEnabled() {
+		actionLabel = "Pod actions"
+		actionDesc = "Successful start, stop, restart, and delete (DockLog UI or kubectl)"
+	} else {
+		actionLabel = "Container actions"
+		actionDesc = "Successful start, stop, restart, and delete (DockLog UI or docker CLI)"
+	}
+
+	var securityDesc string
+	if config.DockerEnabled() && config.KubernetesEnabled() {
+		securityDesc = "Blocked or failed container and pod actions"
+	} else if config.KubernetesEnabled() {
+		securityDesc = "Blocked or failed pod actions"
+	} else {
+		securityDesc = "Blocked or failed container actions"
+	}
+
+	var alertDesc string
+	if config.DockerEnabled() && config.KubernetesEnabled() {
+		alertDesc = "Rule-based alerts from logs, Docker/Kubernetes events, and metrics"
+	} else if config.KubernetesEnabled() {
+		alertDesc = "Rule-based alerts from logs, Kubernetes events, and metrics"
+	} else {
+		alertDesc = "Rule-based alerts from logs, Docker events, and metrics"
+	}
+
+	catalog := []models.NotificationEventTypeInfo{
+		{
+			Key: configKeyNotifyContainer, Label: actionLabel, Description: actionDesc,
+		},
+		{
+			Key: configKeyNotifySecurity, Label: "Security events", Description: securityDesc,
+		},
+		{
+			Key: configKeyNotifyAdmin, Label: "Admin actions",
+			Description: "Password reset and log export",
+		},
+	}
+	if config.DockerEnabled() {
+		catalog = append(catalog, models.NotificationEventTypeInfo{
+			Key: configKeyNotifyHealth, Label: "Health check alerts",
+			Description: "Docker HEALTHCHECK failures and recovery",
+		})
+	}
+	catalog = append(catalog,
+		models.NotificationEventTypeInfo{
+			Key: configKeyNotifyAlerts, Label: "Intelligent alerts", Description: alertDesc,
+		},
+		models.NotificationEventTypeInfo{
+			Key: configKeyNotifyVersion, Label: "Version updates",
+			Description: "A newer DockLog image version is available on Docker Hub",
+		},
+	)
+	return catalog
+}
 
 func (s *NotificationService) Initialize() {
 	if err := s.repo.MigrateLegacyChannels(); err != nil {
@@ -266,7 +310,7 @@ func (s *NotificationService) TestNotification(req models.NotificationTestReques
 		}
 		if !eventMatchesChannel(eventsFromConfig(config), testEvent) {
 			info, _ := s.channelTypeInfo(channel.ChannelType)
-			errs = append(errs, fmt.Sprintf("%s: enable Container actions for start/stop/restart alerts", info.Label))
+			errs = append(errs, fmt.Sprintf("%s: enable %s for start/stop/restart alerts", info.Label, workloadActionsLabel()))
 			continue
 		}
 		if err := s.deliver(channel.ChannelType, config, testEvent); err != nil {
@@ -498,7 +542,7 @@ func (s *NotificationService) buildPublicResponse(prefs models.NotificationPrefe
 	return models.NotificationsPublicResponse{
 		NotificationPreferences: models.NotificationPreferences{Enabled: prefs.Enabled},
 		ChannelTypes:            channelCatalog,
-		EventTypes:              eventCatalog,
+		EventTypes:              notificationEventCatalog(),
 		Channels:                publicChannels,
 	}
 }

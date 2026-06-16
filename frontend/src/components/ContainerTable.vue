@@ -21,9 +21,9 @@
             </td>
           </tr>
         </tbody>
-        <tbody v-else-if="displayContainers.length > 0">
+        <tbody v-else-if="visibleContainers.length > 0">
           <tr
-            v-for="c in displayContainers"
+            v-for="c in visibleContainers"
             :key="c.id"
             class="container-row"
             :class="{ 'is-running': c.state === 'running', 'is-hovered': showInlineStats && activeLiveId === c.id }"
@@ -220,8 +220,18 @@
           </tr>
         </tbody>
       </table>
-      <div v-if="!loading && displayContainers.length" class="table-footer">
-        Showing {{ displayContainers.length }} container{{ displayContainers.length === 1 ? "" : "s" }}
+      <div v-if="!loading && totalCount" class="table-footer">
+        <span>
+          Showing {{ visibleContainers.length }} of {{ totalCount }}
+          container{{ totalCount === 1 ? '' : 's' }}
+        </span>
+        <router-link
+          v-if="showViewAllLink"
+          :to="viewAllTo"
+          class="view-all-link"
+        >
+          {{ viewAllLabel }}
+        </router-link>
       </div>
     </div>
 
@@ -293,6 +303,18 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  maxRows: {
+    type: Number,
+    default: 0,
+  },
+  viewAllTo: {
+    type: [String, Object],
+    default: '',
+  },
+  viewAllLabel: {
+    type: String,
+    default: 'View all containers',
+  },
 });
 
 const {
@@ -311,6 +333,19 @@ const displayContainers = computed(() => {
   }
   return filteredContainers.value;
 });
+
+const totalCount = computed(() => displayContainers.value.length);
+
+const visibleContainers = computed(() => {
+  if (!props.maxRows || props.maxRows <= 0) {
+    return displayContainers.value;
+  }
+  return displayContainers.value.slice(0, props.maxRows);
+});
+
+const showViewAllLink = computed(
+  () => props.maxRows > 0 && totalCount.value > props.maxRows && !!props.viewAllTo,
+);
 </script>
 
 <style scoped>
@@ -589,12 +624,27 @@ const displayContainers = computed(() => {
 }
 
 .table-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
   padding: 0.75rem 1.25rem;
   font-size: 0.72rem;
   font-weight: 600;
   color: var(--text-mute);
   border-top: 1px solid var(--border);
   background: var(--bg-subtle);
+}
+
+.view-all-link {
+  color: var(--accent);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.view-all-link:hover {
+  text-decoration: underline;
 }
 
 @media (max-width: 850px) {

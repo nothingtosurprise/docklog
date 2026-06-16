@@ -100,9 +100,10 @@
           Dashboard
         </router-link>
         <router-link
+          v-if="dockerEnabled()"
           to="/containers"
           class="nav-link"
-          :class="{ active: route.path === '/containers' }"
+          :class="{ active: route.path === '/containers' || route.path.startsWith('/containers/') }"
           :data-tooltip="isSidebarCollapsed ? 'Containers' : null"
         >
           <svg
@@ -116,6 +117,22 @@
             ></path>
           </svg>
           Containers
+        </router-link>
+
+        <router-link
+          v-if="kubernetesEnabled()"
+          to="/kubernetes"
+          class="nav-link"
+          :class="{ active: route.path === '/kubernetes' || route.path.startsWith('/kubernetes/') || route.path === '/pods' }"
+          :data-tooltip="isSidebarCollapsed ? 'Kubernetes' : null"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+            <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+            <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+            <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+          </svg>
+          Kubernetes
         </router-link>
 
         <router-link
@@ -609,6 +626,8 @@ import {
   showToast,
   formatBytes,
   toggleTheme,
+  dockerEnabled,
+  kubernetesEnabled,
 } from "../utils/sharedState";
 import { secureStorage } from "../utils/storage";
 import { createAuthenticatedWebSocket } from "../utils/wsAuth";

@@ -2,6 +2,8 @@ services:
   docklog:
     build: .
     container_name: docklog
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8888:8000"
     environment:
@@ -19,8 +21,17 @@ services:
       - TRUST_PROXY=${TRUST_PROXY:-false}
       - DEBUG_MODE=${DEBUG_MODE:-false}
       - HOST_PROC=/host/proc
+      - RUNTIME_MODE=${RUNTIME_MODE:-docker}
+      - K8S_NAMESPACES=${K8S_NAMESPACES:-}
+      - K8S_CONTEXT=${K8S_CONTEXT:-}
+      - KUBECONFIG=${KUBECONFIG:-}
+      # Rewrites kubeconfig 127.0.0.1/localhost to host.docker.internal inside Docker (auto-detected)
+      - K8S_REWRITE_LOCALHOST=${K8S_REWRITE_LOCALHOST:-}
+      - K8S_API_SERVER=${K8S_API_SERVER:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /proc:/host/proc:ro
       - ./data:/app/data
+      # Mount host kubeconfig when RUNTIME_MODE=kubernetes or both (set KUBECONFIG=/app/kube/config in .env)
+      - ${HOME}/.kube:/app/kube:ro
     restart: unless-stopped

@@ -60,7 +60,20 @@ export const sharedState = reactive({
   envDeletePermission: false,
   envShellPermission: false,
   isBackendDisconnected: false,
+  runtimeMode: 'docker',
+  k8sNamespaces: [],
+  k8sDefaultNs: 'default',
+  k8sAvailable: false,
+  k8sError: '',
 });
+
+export function dockerEnabled() {
+  return sharedState.runtimeMode === 'docker' || sharedState.runtimeMode === 'both';
+}
+
+export function kubernetesEnabled() {
+  return sharedState.runtimeMode === 'kubernetes' || sharedState.runtimeMode === 'both';
+}
 
 export function applyTheme(preference) {
   const normalized = normalizeThemePreference(preference);

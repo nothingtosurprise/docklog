@@ -19,6 +19,14 @@ func PrintConfig(rt Runtime) {
 	fmt.Printf("  port                 %s\n", envOrDefault("PORT", "8000"))
 	fmt.Printf("  db_path              %s\n", db.DefaultPath())
 	fmt.Printf("  docker_host          %s\n", envOrDefault("DOCKER_HOST", "unix:///var/run/docker.sock"))
+	fmt.Printf("  runtime_mode         %s\n", envOrDefault("RUNTIME_MODE", "docker"))
+	if namespaces := strings.TrimSpace(os.Getenv("K8S_NAMESPACES")); namespaces != "" {
+		fmt.Printf("  k8s_namespaces       %s\n", namespaces)
+	} else {
+		fmt.Println("  k8s_namespaces       (all namespaces allowed by cluster RBAC)")
+	}
+	fmt.Printf("  k8s_context          %s\n", envOrDefault("K8S_CONTEXT", "(current kubeconfig context)"))
+	fmt.Printf("  kubeconfig           %s\n", envOrDefault("KUBECONFIG", "(in-cluster or default kubeconfig)"))
 	fmt.Printf("  disable_auth         %s\n", boolEnv("DISABLE_AUTH", false))
 	fmt.Printf("  debug_mode           %s\n", boolEnv("DEBUG_MODE", false))
 	fmt.Printf("  client_access        %s\n", envOrDefault("CLIENT_ACCESS", "strict"))

@@ -9,6 +9,10 @@ var defaultAlertTemplates = []models.AlertTemplate{
 	{RuleKey: "high-cpu", Name: "High CPU usage", Description: "CPU usage above 90% for 5 minutes", Severity: models.AlertSeverityCritical, SourceType: models.AlertSourceMetrics},
 	{RuleKey: "high-memory", Name: "High memory usage", Description: "Memory usage above 80% for 10 minutes", Severity: models.AlertSeverityWarning, SourceType: models.AlertSourceMetrics},
 	{RuleKey: "error-log-spike", Name: "Error log spike", Description: "10 ERROR log lines within 2 minutes", Severity: models.AlertSeverityWarning, SourceType: models.AlertSourceLogs},
+	{RuleKey: "k8s-crash-loop", Name: "Pod crash loop", Description: "Kubernetes CrashLoopBackOff warning event", Severity: models.AlertSeverityCritical, SourceType: models.AlertSourceK8sEvents},
+	{RuleKey: "k8s-image-pull", Name: "Image pull failure", Description: "Kubernetes ImagePullBackOff warning event", Severity: models.AlertSeverityCritical, SourceType: models.AlertSourceK8sEvents},
+	{RuleKey: "k8s-failed-scheduling", Name: "Failed scheduling", Description: "Pod could not be scheduled to a node", Severity: models.AlertSeverityWarning, SourceType: models.AlertSourceK8sEvents},
+	{RuleKey: "k8s-oom-killed", Name: "Pod OOM killed", Description: "Container terminated by the OOM killer", Severity: models.AlertSeverityCritical, SourceType: models.AlertSourceK8sEvents},
 }
 
 func defaultTemplateRules() []models.AlertRule {
@@ -60,6 +64,38 @@ func defaultTemplateRules() []models.AlertRule {
 			ConfigJSON: `{"patterns":[{"pattern":"ERROR"},{"pattern":"FATAL"},{"pattern":"panic","regex":false}],"match_count":10,"window_seconds":120,"case_sensitive":false}`,
 			ScopeJSON: `{"type":"all"}`, ChannelIDsJSON: "[]",
 			CooldownMinutes: 10, MaxPerHour: 12, GroupWindowMinutes: 5, IsTemplate: true,
+		},
+		{
+			RuleKey: "k8s-crash-loop", Name: "Pod crash loop",
+			Description: "Kubernetes CrashLoopBackOff warning event",
+			Severity: models.AlertSeverityCritical, Enabled: false, SourceType: models.AlertSourceK8sEvents,
+			ConfigJSON: `{"events":["crash_loop_backoff"],"min_occurrences":1,"window_seconds":300}`,
+			ScopeJSON: `{"type":"all"}`, ChannelIDsJSON: "[]",
+			CooldownMinutes: 15, MaxPerHour: 20, GroupWindowMinutes: 5, IsTemplate: true,
+		},
+		{
+			RuleKey: "k8s-image-pull", Name: "Image pull failure",
+			Description: "Kubernetes ImagePullBackOff warning event",
+			Severity: models.AlertSeverityCritical, Enabled: false, SourceType: models.AlertSourceK8sEvents,
+			ConfigJSON: `{"events":["image_pull_backoff"],"min_occurrences":1,"window_seconds":300}`,
+			ScopeJSON: `{"type":"all"}`, ChannelIDsJSON: "[]",
+			CooldownMinutes: 15, MaxPerHour: 20, GroupWindowMinutes: 5, IsTemplate: true,
+		},
+		{
+			RuleKey: "k8s-failed-scheduling", Name: "Failed scheduling",
+			Description: "Pod could not be scheduled to a node",
+			Severity: models.AlertSeverityWarning, Enabled: false, SourceType: models.AlertSourceK8sEvents,
+			ConfigJSON: `{"events":["failed_scheduling"],"min_occurrences":1,"window_seconds":300}`,
+			ScopeJSON: `{"type":"all"}`, ChannelIDsJSON: "[]",
+			CooldownMinutes: 15, MaxPerHour: 20, GroupWindowMinutes: 5, IsTemplate: true,
+		},
+		{
+			RuleKey: "k8s-oom-killed", Name: "Pod OOM killed",
+			Description: "Container terminated by the OOM killer",
+			Severity: models.AlertSeverityCritical, Enabled: false, SourceType: models.AlertSourceK8sEvents,
+			ConfigJSON: `{"events":["oom_killed"],"min_occurrences":1,"window_seconds":300}`,
+			ScopeJSON: `{"type":"all"}`, ChannelIDsJSON: "[]",
+			CooldownMinutes: 15, MaxPerHour: 20, GroupWindowMinutes: 5, IsTemplate: true,
 		},
 	}
 }

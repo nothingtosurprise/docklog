@@ -10,12 +10,14 @@ import (
 	"docklog/services"
 
 	"github.com/moby/moby/client"
+	"k8s.io/client-go/kubernetes"
 )
 
 type AuditLogger func(userID int, username, action, resource, status, message string)
 
 type Deps struct {
 	Docker        *client.Client
+	K8s           kubernetes.Interface
 	Notifications *services.NotificationService
 	Alerts        *services.AlertEngine
 	AuditLogger   AuditLogger

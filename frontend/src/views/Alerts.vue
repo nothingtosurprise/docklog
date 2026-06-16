@@ -11,7 +11,7 @@
             <h1>Alerts</h1>
           </div>
           <p class="page-hero-sub">
-            Rule-based monitoring from logs, Docker events, and metrics. Routes to your configured notification channels.
+            Rule-based monitoring from logs, Docker events, Kubernetes warning events, and metrics. Routes to your configured notification channels.
           </p>
         </div>
         <div class="page-hero-stats">
@@ -411,7 +411,30 @@
                     </div>
                   </div>
 
-                  <div v-else class="trigger-panel">
+                  <div v-else-if="form.source_type === 'k8s_events'" class="trigger-panel">
+                    <div class="panel-toolbar">
+                      <span class="label-caps">Kubernetes warning events</span>
+                      <button type="button" class="text-link" @click="selectAllK8sEvents">Select all</button>
+                    </div>
+                    <div class="event-grid">
+                      <label
+                        v-for="event in k8sEventOptions"
+                        :key="event"
+                        class="event-card"
+                        :class="{ active: k8sEventConfig.events.includes(event) }"
+                      >
+                        <input type="checkbox" :value="event" v-model="k8sEventConfig.events" />
+                        <span class="event-card-title">{{ k8sEventOptionMeta[event].label }}</span>
+                        <span class="event-card-desc">{{ k8sEventOptionMeta[event].desc }}</span>
+                      </label>
+                    </div>
+                    <div class="input-group">
+                      <label class="label-caps">Min occurrences</label>
+                      <input v-model.number="k8sEventConfig.min_occurrences" class="premium-input" type="number" min="1" />
+                    </div>
+                  </div>
+
+                  <div v-else-if="form.source_type === 'metrics'" class="trigger-panel">
                     <div class="form-grid triple">
                       <div class="input-group">
                         <label class="label-caps">Metric</label>
@@ -435,10 +458,10 @@
                 <section id="section-scope" class="editor-section">
                   <div class="section-head">
                     <h4>Scope</h4>
-                    <p>Limit which containers this rule applies to.</p>
+                    <p>{{ isK8sSource ? 'Limit which pods or namespaces this rule applies to.' : 'Limit which containers this rule applies to.' }}</p>
                   </div>
                   <div class="input-group">
-                    <label class="label-caps">Target containers</label>
+                    <label class="label-caps">{{ isK8sSource ? 'Target resources' : 'Target containers' }}</label>
                     <div class="scope-picker">
                       <button
                         v-for="option in scopeOptions"
@@ -453,14 +476,14 @@
                     </div>
                   </div>
                   <div v-if="form.scope.type === 'names'" class="input-group">
-                    <label class="label-caps">Container names</label>
-                    <input v-model="scopeNames" class="premium-input" placeholder="api, worker" />
-                    <p class="field-hint">Comma-separated exact container names</p>
+                    <label class="label-caps">{{ isK8sSource ? 'Resource names' : 'Container names' }}</label>
+                    <input v-model="scopeNames" class="premium-input" :placeholder="isK8sSource ? 'default/api, worker' : 'api, worker'" />
+                    <p class="field-hint">{{ isK8sSource ? 'Comma-separated pod names or namespace/pod values' : 'Comma-separated exact container names' }}</p>
                   </div>
                   <div v-if="form.scope.type === 'patterns'" class="input-group">
                     <label class="label-caps">Name patterns</label>
-                    <input v-model="scopePatterns" class="premium-input mono" placeholder="backend-*, *api*" />
-                    <p class="field-hint">Comma-separated glob patterns</p>
+                    <input v-model="scopePatterns" class="premium-input mono" :placeholder="isK8sSource ? 'default/*, *api*' : 'backend-*, *api*'" />
+                    <p class="field-hint">{{ isK8sSource ? 'Comma-separated glob patterns against namespace/pod' : 'Comma-separated glob patterns' }}</p>
                   </div>
                 </section>
 
@@ -548,7 +571,7 @@
 import { computed, nextTick, onMounted, reactive, ref } from 'vue';
 import BrandIcon from '../components/BrandIcon.vue';
 import ChannelIcon from '../components/ChannelIcon.vue';
-import { showToast } from '../utils/sharedState';
+import { showToast, kubernetesEnabled } from '../utils/sharedState';
 import {
   createAlertRule,
   deleteAlertRule,
@@ -576,23 +599,56 @@ const editorBodyRef = ref(null);
 
 const eventOptions = ['start', 'stop', 'restart', 'exit_nonzero', 'unhealthy', 'oom'];
 
+const k8sEventOptions = [
+  'crash_loop_backoff',
+  'image_pull_backoff',
+  'failed_scheduling',
+  'oom_killed',
+  'backoff',
+  'failed',
+  'failed_mount',
+  'evicted',
+  'unhealthy',
+];
+
 const severityOptions = [
   { value: 'info', label: 'Info', hint: 'Awareness only' },
   { value: 'warning', label: 'Warning', hint: 'Needs attention' },
   { value: 'critical', label: 'Critical', hint: 'Immediate action' },
 ];
 
-const sourceOptions = [
+const baseSourceOptions = [
   { value: 'logs', label: 'Logs', hint: 'Pattern matching in container output' },
   { value: 'events', label: 'Events', hint: 'Docker lifecycle and health signals' },
   { value: 'metrics', label: 'Metrics', hint: 'CPU or memory thresholds' },
 ];
 
-const scopeOptions = [
-  { value: 'all', label: 'All containers' },
-  { value: 'names', label: 'By name' },
-  { value: 'patterns', label: 'By pattern' },
-];
+const sourceOptions = computed(() => {
+  const options = [...baseSourceOptions];
+  if (kubernetesEnabled()) {
+    options.splice(2, 0, {
+      value: 'k8s_events',
+      label: 'Kubernetes',
+      hint: 'Warning events from pods and workloads',
+    });
+  }
+  return options;
+});
+
+const scopeOptions = computed(() => {
+  if (isK8sSource.value) {
+    return [
+      { value: 'all', label: 'All resources' },
+      { value: 'names', label: 'By name' },
+      { value: 'patterns', label: 'By pattern' },
+    ];
+  }
+  return [
+    { value: 'all', label: 'All containers' },
+    { value: 'names', label: 'By name' },
+    { value: 'patterns', label: 'By pattern' },
+  ];
+});
 
 const eventOptionMeta = {
   start: { label: 'Start', desc: 'Container started' },
@@ -603,13 +659,30 @@ const eventOptionMeta = {
   oom: { label: 'OOM', desc: 'Killed for out-of-memory' },
 };
 
-const editorSections = [
+const k8sEventOptionMeta = {
+  crash_loop_backoff: { label: 'Crash loop', desc: 'CrashLoopBackOff' },
+  image_pull_backoff: { label: 'Image pull', desc: 'ImagePullBackOff or ErrImagePull' },
+  failed_scheduling: { label: 'Scheduling', desc: 'FailedScheduling' },
+  oom_killed: { label: 'OOM killed', desc: 'Container OOMKilled' },
+  backoff: { label: 'Backoff', desc: 'Generic BackOff restarts' },
+  failed: { label: 'Failed', desc: 'Container or pod failed' },
+  failed_mount: { label: 'Mount failed', desc: 'Volume mount failed' },
+  evicted: { label: 'Evicted', desc: 'Pod evicted from node' },
+  unhealthy: { label: 'Unhealthy', desc: 'Probe or lifecycle hook failure' },
+};
+
+const editorSections = computed(() => [
   { id: 'basics', step: '1', label: 'Basics', hint: 'Name and severity' },
   { id: 'trigger', step: '2', label: 'Trigger', hint: 'What fires the alert' },
-  { id: 'scope', step: '3', label: 'Scope', hint: 'Which containers' },
+  {
+    id: 'scope',
+    step: '3',
+    label: 'Scope',
+    hint: form.source_type === 'k8s_events' ? 'Which pods or namespaces' : 'Which containers',
+  },
   { id: 'destinations', step: '4', label: 'Destinations', hint: 'Where to send' },
   { id: 'throttle', step: '5', label: 'Throttling', hint: 'Noise control' },
-];
+]);
 
 const form = reactive({
   rule_id: '',
@@ -628,14 +701,24 @@ const form = reactive({
 
 const logConfig = reactive({ pattern: 'ERROR', match_count: 10, window_seconds: 120, case_sensitive: false });
 const eventConfig = reactive({ events: ['restart'], min_occurrences: 1, window_seconds: 300 });
+const k8sEventConfig = reactive({ events: ['crash_loop_backoff'], min_occurrences: 1, window_seconds: 300 });
 const metricConfig = reactive({ metric: 'cpu', operator: 'gt', threshold: 90, duration_minutes: 5 });
 const scopeNames = ref('');
 const scopePatterns = ref('');
 
 const enabledCount = computed(() => rules.value.filter((rule) => rule.enabled).length);
+const isK8sSource = computed(() => form.source_type === 'k8s_events');
 
 function formatSourceType(source) {
-  const map = { logs: 'Logs', events: 'Events', metrics: 'Metrics', log: 'Logs', metric: 'Metrics', event: 'Events' };
+  const map = {
+    logs: 'Logs',
+    events: 'Events',
+    metrics: 'Metrics',
+    k8s_events: 'Kubernetes',
+    log: 'Logs',
+    metric: 'Metrics',
+    event: 'Events',
+  };
   return map[source] || source || 'Unknown';
 }
 
@@ -644,6 +727,7 @@ function sourceClass(source) {
   if (key === 'log') return 'logs';
   if (key === 'metric') return 'metrics';
   if (key === 'event') return 'events';
+  if (source === 'k8s_events') return 'k8s_events';
   return source || 'logs';
 }
 
@@ -674,6 +758,10 @@ function selectAllEvents() {
   eventConfig.events = [...eventOptions];
 }
 
+function selectAllK8sEvents() {
+  k8sEventConfig.events = [...k8sEventOptions];
+}
+
 function scrollToSection(id) {
   activeSection.value = id;
   const el = document.getElementById(`section-${id}`);
@@ -686,8 +774,9 @@ function syncActiveSection() {
   const container = editorBodyRef.value;
   if (!container) return;
   const offset = container.scrollTop + 120;
-  for (let i = editorSections.length - 1; i >= 0; i -= 1) {
-    const section = editorSections[i];
+  const sections = editorSections.value;
+  for (let i = sections.length - 1; i >= 0; i -= 1) {
+    const section = sections[i];
     const el = document.getElementById(`section-${section.id}`);
     if (el && el.offsetTop <= offset) {
       activeSection.value = section.id;
@@ -718,6 +807,9 @@ function buildConfig() {
   }
   if (form.source_type === 'events') {
     return { ...eventConfig };
+  }
+  if (form.source_type === 'k8s_events') {
+    return { ...k8sEventConfig };
   }
   return { ...metricConfig };
 }
@@ -833,6 +925,7 @@ function editRule(rule) {
     });
   }
   if (rule.source_type === 'events' && rule.config) Object.assign(eventConfig, rule.config);
+  if (rule.source_type === 'k8s_events' && rule.config) Object.assign(k8sEventConfig, rule.config);
   if (rule.source_type === 'metrics' && rule.config) Object.assign(metricConfig, rule.config);
   editorOpen.value = true;
   nextTick(() => editorBodyRef.value?.scrollTo({ top: 0 }));
@@ -1000,6 +1093,7 @@ onMounted(load);
 
 .source-badge.logs { background: rgba(8, 145, 178, 0.12); color: var(--accent); }
 .source-badge.events { background: rgba(139, 92, 246, 0.12); color: #a78bfa; }
+.source-badge.k8s_events { background: rgba(59, 130, 246, 0.12); color: #60a5fa; }
 .source-badge.metrics { background: rgba(245, 158, 11, 0.12); color: #fbbf24; }
 
 .dest-count {
@@ -1680,7 +1774,7 @@ onMounted(load);
 
 .source-picker {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 0.55rem;
 }
 
@@ -1721,6 +1815,11 @@ onMounted(load);
 .source-card.events.active {
   border-color: rgba(139, 92, 246, 0.45);
   background: rgba(139, 92, 246, 0.08);
+}
+
+.source-card.k8s_events.active {
+  border-color: rgba(59, 130, 246, 0.45);
+  background: rgba(59, 130, 246, 0.08);
 }
 
 .source-card.metrics.active {

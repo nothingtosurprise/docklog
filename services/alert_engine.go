@@ -30,6 +30,7 @@ type AlertEngine struct {
 	suppressor         *alertSuppressor
 	queue              chan queuedAlert
 	sharedEventTracker *occurrenceTracker
+	sharedK8sEventTracker *occurrenceTracker
 	recoveryMu         sync.Mutex
 	recoveryState      map[string]models.AlertRule
 	metricTracker      *metricBreachTracker

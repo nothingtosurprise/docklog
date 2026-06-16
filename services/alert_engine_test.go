@@ -40,6 +40,18 @@ func TestEventTypeMatches(t *testing.T) {
 	}
 }
 
+func TestNormalizeK8sAlertEvent(t *testing.T) {
+	if got := normalizeK8sAlertEvent("CrashLoopBackOff"); got != "crash_loop_backoff" {
+		t.Fatalf("expected crash_loop_backoff, got %q", got)
+	}
+	if got := normalizeK8sAlertEvent("ImagePullBackOff"); got != "image_pull_backoff" {
+		t.Fatalf("expected image_pull_backoff, got %q", got)
+	}
+	if got := normalizeK8sAlertEvent("Started"); got != "" {
+		t.Fatalf("expected empty for non-alert reason, got %q", got)
+	}
+}
+
 type LogPatternInput struct {
 	Pattern string
 	Exclude bool

@@ -7,9 +7,10 @@ const (
 	AlertSeverityWarning  = "warning"
 	AlertSeverityCritical = "critical"
 
-	AlertSourceLogs    = "logs"
-	AlertSourceEvents  = "events"
-	AlertSourceMetrics = "metrics"
+	AlertSourceLogs     = "logs"
+	AlertSourceEvents   = "events"
+	AlertSourceMetrics  = "metrics"
+	AlertSourceK8sEvents = "k8s_events"
 
 	AlertScopeAll      = "all"
 	AlertScopeNames    = "names"

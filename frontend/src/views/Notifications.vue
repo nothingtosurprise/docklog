@@ -51,7 +51,7 @@
               </span>
             </label>
             <p v-if="!form.enabled && activeChannelCount > 0" class="hint warn delivery-warning">
-              Delivery is off. Live container alerts will not send until you turn this on and save.
+              Delivery is off. Live alerts will not send until you turn this on and save.
             </p>
           </div>
 

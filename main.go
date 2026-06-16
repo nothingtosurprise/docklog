@@ -23,6 +23,7 @@ func main() {
 	appcli.LogRunMode(appRuntime)
 
 	config.LoadDebugMode()
+	config.LoadRuntimeConfig()
 	config.LoadAuthDisabled()
 	config.InitSecretKey()
 	config.LoadActionFlags()

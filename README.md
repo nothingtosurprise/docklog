@@ -1,29 +1,10 @@
-# DockLog 🐳
+# K8S_NAMESPACESDockLog 🐳
 
-<p align="center">
-  <img src="frontend/public/logo-horizontal.png?v=2" alt="DockLog Logo" width="420">
-</p>
+**High-performance, real-time Docker log viewer built for teams.**
 
-<p align="center">
-  <strong>High-performance, real-time Docker log viewer built for teams.</strong>
-</p>
+Lightweight. Secure. Modern. Built for real-world Docker environments.
 
-<p align="center">
-  Lightweight. Secure. Modern. Built for real-world Docker environments.
-</p>
-
-<p align="center">
-  DockLog provides real-time log streaming, RBAC, audit logging, system monitoring, and container management in a clean modern interface.
-</p>
-
-<p align="center">
-  <img src="https://img.shields.io/docker/pulls/aimldev/docklog" alt="Docker Pulls">
-  <img src="https://img.shields.io/github/license/Team-AI-ML/docklog" alt="License">
-  <img src="https://img.shields.io/badge/version-1.0.0-0891b2" alt="Version">
-  <img src="https://img.shields.io/badge/Backend-Go-00add8" alt="Backend">
-  <img src="https://img.shields.io/badge/Frontend-Vue--3-42b883" alt="Frontend">
-  <img src="https://img.shields.io/github/stars/Team-AI-ML/docklog?style=social" alt="GitHub Stars">
-</p>
+DockLog provides real-time log streaming, RBAC, audit logging, system monitoring, and container management in a clean modern interface.
 
 ---
 
@@ -37,7 +18,7 @@ DockLog focuses on fast deployment, low resource usage, and team-safe Docker vis
 
 ## 📊 Dashboard
 
-![Dashboard](assets/dashboard.webp)
+Dashboard
 
 Real-time Docker monitoring with lightweight system metrics and container controls.
 
@@ -45,7 +26,7 @@ Real-time Docker monitoring with lightweight system metrics and container contro
 
 ## 🐳 Container Management
 
-![Containers](assets/containers.webp)
+Containers
 
 Monitor, control, and manage containers with fast operational actions.
 
@@ -53,7 +34,7 @@ Monitor, control, and manage containers with fast operational actions.
 
 ## 📜 Real-Time Logs
 
-![Logs](assets/logs.webp)
+Logs
 
 Stream container logs live with search, highlighting, and multi-container layout.
 
@@ -61,7 +42,7 @@ Stream container logs live with search, highlighting, and multi-container layout
 
 ## 📈 System Health
 
-![System Health](assets/health.webp)
+System Health
 
 Historical CPU and memory charts with configurable time ranges.
 
@@ -69,7 +50,7 @@ Historical CPU and memory charts with configurable time ranges.
 
 ## 🔐 RBAC & Staff Management
 
-![RBAC](assets/rbac.webp)
+RBAC
 
 Granular container-level permissions with wildcard and regex-based access control.
 
@@ -77,7 +58,7 @@ Granular container-level permissions with wildcard and regex-based access contro
 
 ## 🕵️ Security Audit Logs
 
-![Audit Logs](assets/audit-logs.webp)
+Audit Logs
 
 Track administrative actions and security events with a complete audit trail.
 
@@ -107,7 +88,7 @@ Most Docker log viewers are built for a single administrator. DockLog is built f
 
 ## 🔐 Advanced RBAC
 
-- Wildcard permissions (`backend-*`) and full regex (`^prod-.*$`)
+- Wildcard permissions (`backend-`*) and full regex (`^prod-.*$`)
 - Per-user start / stop / restart / delete rights
 - Staff management and container-level isolation
 
@@ -146,6 +127,7 @@ See [Security & RBAC](docs/SECURITY.md) for details.
 
 # 🛠 Tech Stack
 
+
 | Layer            | Technology                |
 | ---------------- | ------------------------- |
 | Backend          | Go + Echo                 |
@@ -155,30 +137,37 @@ See [Security & RBAC](docs/SECURITY.md) for details.
 | Container Engine | Docker SDK                |
 | Styling          | Vanilla CSS design system |
 
+
 ---
 
 # ⚙️ Configuration
 
 ## Environment Variables
 
-| Variable | Description | Default |
-| -------- | ----------- | ------- |
-| `SECRET_KEY` | JWT signing secret. **Required in production.** | `secret-key-change-this` |
-| `DB_PATH` | SQLite database path | `docklog.db` |
-| `PORT` | HTTP listen port | `8000` |
-| `DOCKER_HOST` | Docker daemon socket | `unix:///var/run/docker.sock` |
-| `DISABLE_AUTH` | Disable auth (in-memory DB, no login) | `false` |
-| `CLIENT_ACCESS` | Restrict `/api` and `/ws` to web UI + native clients (`strict` or `off`) | `strict` |
-| `ALLOWED_ORIGINS` | Extra browser origins for the Vue UI (comma-separated URLs) | _(empty)_ |
-| `TRUST_PROXY` | Honor `X-Forwarded-*` headers when behind a reverse proxy | `false` |
-| `DEBUG_MODE` | Enable verbose internal debug logs in container output | `false` |
-| `ENV` | Set to `production` to disable localhost origin bypass | _(empty)_ |
-| `ALLOW_START` | Allow start action (no-auth mode env flags) | `false` |
-| `ALLOW_STOP` | Allow stop action | `false` |
-| `ALLOW_RESTART` | Allow restart action | `false` |
-| `ALLOW_DELETE` | Allow delete action | `false` |
-| `ALLOW_SHELL` | Allow interactive shell over WebSocket (`ALLOW_BASH` is an alias) | `false` |
-| `EXCLUDE_CONTAINERS` | Comma-separated container names to hide from the dashboard | _(empty)_ |
+
+| Variable             | Description                                                                                             | Default                       |
+| -------------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| `SECRET_KEY`         | JWT signing secret. **Required in production.**                                                         | `secret-key-change-this`      |
+| `DB_PATH`            | SQLite database path                                                                                    | `docklog.db`                  |
+| `PORT`               | HTTP listen port                                                                                        | `8000`                        |
+| `DOCKER_HOST`        | Docker daemon socket                                                                                    | `unix:///var/run/docker.sock` |
+| `RUNTIME_MODE`       | Runtime backend mode (`docker`, `kubernetes`, `both`). Controls which APIs and UI sections are enabled. | `docker`                      |
+| `K8S_NAMESPACES`     | Comma-separated namespace allowlist. Empty = all namespaces allowed by cluster RBAC.                    | *(empty)*                     |
+| `K8S_CONTEXT`        | Kubernetes context override                                                                             | *(empty)*                     |
+| `KUBECONFIG`         | Path to kubeconfig                                                                                      | *(empty)*                     |
+| `DISABLE_AUTH`       | Disable auth (in-memory DB, no login)                                                                   | `false`                       |
+| `CLIENT_ACCESS`      | Restrict `/api` and `/ws` to web UI + native clients (`strict` or `off`)                                | `strict`                      |
+| `ALLOWED_ORIGINS`    | Extra browser origins for the Vue UI (comma-separated URLs)                                             | *(empty)*                     |
+| `TRUST_PROXY`        | Honor `X-Forwarded-`* headers when behind a reverse proxy                                               | `false`                       |
+| `DEBUG_MODE`         | Enable verbose internal debug logs in container output                                                  | `false`                       |
+| `ENV`                | Set to `production` to disable localhost origin bypass                                                  | *(empty)*                     |
+| `ALLOW_START`        | Allow start action (no-auth mode env flags)                                                             | `false`                       |
+| `ALLOW_STOP`         | Allow stop action                                                                                       | `false`                       |
+| `ALLOW_RESTART`      | Allow restart action                                                                                    | `false`                       |
+| `ALLOW_DELETE`       | Allow delete action                                                                                     | `false`                       |
+| `ALLOW_SHELL`        | Allow interactive shell over WebSocket (`ALLOW_BASH` is an alias)                                       | `false`                       |
+| `EXCLUDE_CONTAINERS` | Comma-separated container names to hide from the dashboard                                              | *(empty)*                     |
+
 
 The DockLog container itself is **always hidden** (matched by name `docklog` or image containing `docklog`).
 
@@ -193,12 +182,31 @@ Configure alerts from **Admin → Notifications** in the UI. Webhook URLs are st
 
 Legacy env-based webhook URLs are migrated into `notification_channels` on first startup if present.
 
+### Kubernetes (Docker Compose)
+
+When `RUNTIME_MODE` is `kubernetes` or `both`, DockLog needs API access to a cluster. Without a kubeconfig, DockLog **starts anyway** and shows a warning; the Pods page reports the connection error.
+
+**Option A — mount your local kubeconfig:**
+
+```yaml
+environment:
+  - RUNTIME_MODE=both
+  - KUBECONFIG=/app/kube/config
+  - K8S_NAMESPACES=default,prod
+volumes:
+  - ${HOME}/.kube:/app/kube:ro
+```
+
+**Option B — run DockLog inside the cluster** with a ServiceAccount that can list pods/namespaces (in-cluster config is detected automatically).
+
+**Docker Desktop / local clusters:** kubeconfig often points at `https://127.0.0.1:PORT`. Inside a container that address is unreachable, so DockLog rewrites it to `host.docker.internal` and sets TLS `ServerName=localhost` to match the Docker Desktop certificate. If you still see TLS errors after `docker compose up -d --build`, set `K8S_INSECURE_SKIP_TLS_VERIFY=true` in `the environments`.
+
 ### Production checklist
 
 1. Generate and set a strong `SECRET_KEY`:
-   ```bash
+  ```bash
    openssl rand -base64 32
-   ```
+  ```
 2. Set `ENV=production` (or `GO_ENV=production`).
 3. Keep `CLIENT_ACCESS=strict`.
 4. Run behind Nginx, Traefik, or Caddy with HTTPS and set `TRUST_PROXY=true`.
@@ -207,11 +215,13 @@ Legacy env-based webhook URLs are migrated into `notification_channels` on first
 
 ### Client access
 
-| Client | How it connects |
-| ------ | --------------- |
-| **Vue web UI** | Served by DockLog; sends `X-DockLog-Client: web` and passes origin checks |
-| **Native mobile app** | Standard JWT after `POST /api/token`; no extra headers published here |
-| **curl / random sites** | Blocked when `CLIENT_ACCESS=strict` |
+
+| Client                  | How it connects                                                           |
+| ----------------------- | ------------------------------------------------------------------------- |
+| **Vue web UI**          | Served by DockLog; sends `X-DockLog-Client: web` and passes origin checks |
+| **Native mobile app**   | Standard JWT after `POST /api/token`; no extra headers published here     |
+| **curl / random sites** | Blocked when `CLIENT_ACCESS=strict`                                       |
+
 
 Set `CLIENT_ACCESS=off` only for local debugging.
 
@@ -223,8 +233,6 @@ The official Flutter client supports **Advanced Settings** when adding a server:
 - **Skip TLS verification**: self-signed certificates
 - **Custom HTTP headers**: Cloudflare Access and similar proxies
 
-See [`docs/FLUTTER.md`](docs/FLUTTER.md) and the [mobile app documentation](https://docklog.sauravsaini.dev/mobile-app).
-
 ---
 
 # 👥 User Roles
@@ -235,7 +243,7 @@ Full container visibility, user management, audit log access, and container cont
 
 ## 🛠 Staff Member
 
-Container visibility is controlled with patterns such as:
+Container/Pods visibility is controlled with patterns such as:
 
 ```text
 redis
@@ -252,9 +260,11 @@ Users only see containers matching their assigned rules.
 
 ## 🔑 Default Login
 
-| Username | Password |
-| -------- | -------- |
+
+| Username | Password   |
+| -------- | ---------- |
 | `admin`  | `admin123` |
+
 
 > [!WARNING]
 > Change the default administrator password immediately after first login.
@@ -289,7 +299,7 @@ Or build locally from this repository:
 docker compose up --build -d
 ```
 
-Open **http://localhost:8888**
+Open **[http://localhost:8888](http://localhost:8888)**
 
 ### No-auth mode (development only)
 
@@ -334,16 +344,18 @@ docklog
 
 ### CLI commands
 
-| Command | Description |
-| ------- | ----------- |
-| `docklog` | Run full dashboard (default) |
-| `docklog server` | Full API + WebSockets + embedded Vue UI |
-| `docklog agent` | Fleet agent mode (local UI + API; optional `CONTROL_PLANE_URL`) |
-| `docklog agent-only` | Headless agent (API/WebSockets only, no bundled UI) |
-| `docklog reset-password <user> <pass>` | Reset a user password in SQLite |
-| `docklog config` | Print non-secret configuration |
-| `docklog version` | Print version |
-| `docklog help [command]` | Show help |
+
+| Command                                | Description                                                     |
+| -------------------------------------- | --------------------------------------------------------------- |
+| `docklog`                              | Run full dashboard (default)                                    |
+| `docklog server`                       | Full API + WebSockets + embedded Vue UI                         |
+| `docklog agent`                        | Fleet agent mode (local UI + API; optional `CONTROL_PLANE_URL`) |
+| `docklog agent-only`                   | Headless agent (API/WebSockets only, no bundled UI)             |
+| `docklog reset-password <user> <pass>` | Reset a user password in SQLite                                 |
+| `docklog config`                       | Print non-secret configuration                                  |
+| `docklog version`                      | Print version                                                   |
+| `docklog help [command]`               | Show help                                                       |
+
 
 ```bash
 docklog help agent-only
@@ -373,19 +385,6 @@ Recommended:
 
 ---
 
-# 📂 Project Structure
-
-| Path | Description |
-| ---- | ----------- |
-| `main.go` | HTTP routes, Docker integration, WebSockets |
-| `auth_helpers.go` | JWT validation, client access, rate limiting |
-| `frontend/` | Vue 3 SPA (built into `frontend/dist`) |
-| `db/` | SQLite schema and migrations |
-| `docs/` | Architecture and security documentation |
-| `.github/workflows/` | CI/CD |
-
----
-
 # 📚 Documentation
 
 - [Architecture Overview](docs/ARCHITECTURE.md)
@@ -395,11 +394,13 @@ Recommended:
 
 # 📈 Performance
 
-| Metric | Value |
-| ------ | ----- |
-| RAM usage | ~30–50 MB |
-| Log throughput | 10k+ lines/sec |
-| Deployment | Single container |
+
+| Metric         | Value            |
+| -------------- | ---------------- |
+| RAM usage      | ~30–50 MB        |
+| Log throughput | 10k+ lines/sec   |
+| Deployment     | Single container |
+
 
 ---
 
@@ -422,7 +423,7 @@ Recommended:
 
 # 📦 Docker Hub
 
-https://hub.docker.com/r/aimldev/docklog
+[https://hub.docker.com/r/aimldev/docklog](https://hub.docker.com/r/aimldev/docklog) 
 
 ---
 
@@ -432,6 +433,4 @@ MIT License. See [LICENSE](LICENSE).
 
 ---
 
-<p align="center">
-  Built for developers who want real-time Docker visibility without deploying an observability cathedral.
-</p>
+Built for developers who want real-time Docker visibility without deploying an observability cathedral.

@@ -18,6 +18,12 @@ func (s *Server) registerPublicRoutes() {
 			"allow_restart": config.CanRestart,
 			"allow_delete":  config.CanDelete,
 			"allow_shell":   config.AllowShell,
+			"runtime_mode":    config.RuntimeMode,
+			"k8s_namespaces":  config.K8sNamespaces,
+			"k8s_default_ns":  config.DefaultK8sNamespace(),
+			"k8s_context":     config.K8sContext,
+			"k8s_available":   config.K8sAvailable,
+			"k8s_error":       config.K8sConfigError,
 			"client_access": middleware.ClientAccessConfig(),
 		})
 	})

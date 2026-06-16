@@ -252,7 +252,11 @@
               </div>
 
               <div class="perm-section">
-                <label class="label-caps">Container Visibility</label>
+                <label class="label-caps">{{ visibilitySectionLabel }}</label>
+                <p v-if="showKubernetesVisibility" class="visibility-hint">
+                  The same allowed patterns apply to Docker containers and Kubernetes
+                  namespaces/pods. Restrict a namespace, a pod, or both.
+                </p>
                 <div class="access-toggle-container">
                   <button
                     :class="['access-choice', { active: isRestricted }]"
@@ -276,7 +280,7 @@
                         type="text"
                         v-model="activeUser.allowed_containers"
                         class="premium-input"
-                        placeholder="e.g. api-*, prod-web, ^front.*"
+                        :placeholder="patternPlaceholder"
                         autocomplete="off"
                         @focus="onPatternFocus"
                         @blur="hidePatternSuggestions"
@@ -306,12 +310,12 @@
                       </Transition>
                     </div>
 
-                    <div v-if="runningContainerNames.length" class="pattern-fleet mt-3">
+                    <div v-if="fleetResourceNames.length" class="pattern-fleet mt-3">
                       <div class="pattern-fleet-head">
-                        <span class="label-caps label-caps-inline">Running containers</span>
+                        <span class="label-caps label-caps-inline">{{ fleetSectionLabel }}</span>
                         <span class="pattern-fleet-count">{{ availableFleetNames.length }} available</span>
                         <button
-                          v-if="runningContainerNames.length > fleetInlineLimit"
+                          v-if="fleetResourceNames.length > fleetInlineLimit"
                           type="button"
                           class="pattern-fleet-toggle"
                           @click="fleetExpanded = !fleetExpanded"
@@ -320,15 +324,15 @@
                         </button>
                       </div>
                       <p
-                        v-if="runningContainerNames.length > fleetInlineLimit && !fleetExpanded"
+                        v-if="fleetResourceNames.length > fleetInlineLimit && !fleetExpanded"
                         class="pattern-fleet-hint"
                       >
-                        Type in the field for quick picks, or browse the full running list.
+                        Type in the field for quick picks, or browse the full list.
                       </p>
                       <div
                         v-show="showFleetList"
                         class="pattern-fleet-chips"
-                        :class="{ scrollable: runningContainerNames.length > fleetInlineLimit }"
+                        :class="{ scrollable: fleetResourceNames.length > fleetInlineLimit }"
                       >
                         <button
                           v-for="name in availableFleetNames"
@@ -343,19 +347,35 @@
                           v-if="!availableFleetNames.length"
                           class="pattern-fleet-all-added"
                         >
-                          All running containers are already in the pattern.
+                          All listed resources are already in the pattern.
                         </span>
                       </div>
                     </div>
-                    <p v-else-if="containersLoaded" class="pattern-fleet-empty mt-3">
-                      No running containers on this host right now.
+                    <p v-else-if="fleetLoaded" class="pattern-fleet-empty mt-3">
+                      {{ fleetEmptyMessage }}
                     </p>
 
                     <div class="pattern-examples mt-3">
-                      <div class="example-item">
-                        <code class="tag">api-*</code>
-                        <span class="desc">Wildcard (matches api-v1, api-db, etc)</span>
-                      </div>
+                      <template v-if="dockerEnabled()">
+                        <div class="example-item">
+                          <code class="tag">api-*</code>
+                          <span class="desc">Docker wildcard (api-v1, api-db, …)</span>
+                        </div>
+                      </template>
+                      <template v-if="kubernetesEnabled()">
+                        <div class="example-item">
+                          <code class="tag">prod</code>
+                          <span class="desc">Namespace only (all pods in <code class="tag">prod</code>)</span>
+                        </div>
+                        <div class="example-item">
+                          <code class="tag">prod/api-*</code>
+                          <span class="desc">Pods in a namespace (namespace/pod)</span>
+                        </div>
+                        <div class="example-item">
+                          <code class="tag">*-deployment-*</code>
+                          <span class="desc">Pod name across namespaces</span>
+                        </div>
+                      </template>
                       <div class="example-item">
                         <code class="tag">^prod-.*</code>
                         <span class="desc">Regex (advanced matching)</span>
@@ -509,7 +529,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from "vue";
-import { showToast } from "../utils/sharedState";
+import { showToast, dockerEnabled, kubernetesEnabled } from "../utils/sharedState";
 import { sharedState } from "../utils/sharedState";
 import { apiFetch } from "../utils/apiFetch";
 import { apiErrorMessage, readApiError } from "../utils/authSession";
@@ -521,6 +541,33 @@ const props = defineProps({
 const emit = defineEmits(["update-count"]);
 
 const envShellPermission = computed(() => sharedState.envShellPermission === true);
+const showKubernetesVisibility = computed(() => kubernetesEnabled());
+const visibilitySectionLabel = computed(() => {
+  if (dockerEnabled() && kubernetesEnabled()) return "Resource Visibility";
+  if (kubernetesEnabled()) return "Kubernetes Visibility";
+  return "Container Visibility";
+});
+const patternPlaceholder = computed(() => {
+  if (dockerEnabled() && kubernetesEnabled()) {
+    return "e.g. api-*, prod, prod/web-*";
+  }
+  if (kubernetesEnabled()) {
+    return "e.g. prod, prod/api-*, ^prod-.*";
+  }
+  return "e.g. api-*, prod-web, ^front.*";
+});
+const fleetSectionLabel = computed(() => {
+  if (dockerEnabled() && kubernetesEnabled()) return "Running resources";
+  if (kubernetesEnabled()) return "Namespaces & pods";
+  return "Running containers";
+});
+const fleetEmptyMessage = computed(() => {
+  if (dockerEnabled() && kubernetesEnabled()) {
+    return "No running containers or Kubernetes pods are available right now.";
+  }
+  if (kubernetesEnabled()) return "No Kubernetes namespaces or pods are available right now.";
+  return "No running containers on this host right now.";
+});
 
 const baseActionRights = [
   { key: "start", label: "Start", field: "can_start", createField: "canStart" },
@@ -576,11 +623,12 @@ const isRestricted = computed(() =>
 const setRestricted = (val) => {
   if (showCreateModal.value) newUser.value.is_restricted = val;
   else editingUser.value.is_restricted_access = val;
-  if (val) fetchRunningContainers();
+  if (val) fetchFleetResources();
 };
 
 const fleetContainers = ref([]);
-const containersLoaded = ref(false);
+const k8sFleetNames = ref([]);
+const fleetLoaded = ref(false);
 const patternSuggestionsOpen = ref(false);
 const fleetExpanded = ref(false);
 const fleetInlineLimit = 6;
@@ -592,6 +640,17 @@ const runningContainerNames = computed(() =>
     .map((c) => c.name)
     .sort((a, b) => a.localeCompare(b)),
 );
+
+const fleetResourceNames = computed(() => {
+  const names = new Set();
+  if (dockerEnabled()) {
+    runningContainerNames.value.forEach((name) => names.add(name));
+  }
+  if (kubernetesEnabled()) {
+    k8sFleetNames.value.forEach((name) => names.add(name));
+  }
+  return [...names].sort((a, b) => a.localeCompare(b));
+});
 
 const selectedPatternNames = computed(() => {
   const val = activeUser.value?.allowed_containers || "";
@@ -605,12 +664,12 @@ const selectedPatternNames = computed(() => {
 });
 
 const availableFleetNames = computed(() =>
-  runningContainerNames.value.filter((n) => !selectedPatternNames.value.has(n)),
+  fleetResourceNames.value.filter((n) => !selectedPatternNames.value.has(n)),
 );
 
 const showFleetList = computed(
   () =>
-    runningContainerNames.value.length <= fleetInlineLimit || fleetExpanded.value,
+    fleetResourceNames.value.length <= fleetInlineLimit || fleetExpanded.value,
 );
 
 const patternQuery = computed(() => {
@@ -627,7 +686,7 @@ const filteredPatternSuggestions = computed(() => {
       .map((p) => p.trim())
       .filter(Boolean),
   );
-  let names = runningContainerNames.value.filter((n) => !selected.has(n));
+  let names = fleetResourceNames.value.filter((n) => !selected.has(n));
   if (q) {
     names = names.filter((n) => n.toLowerCase().includes(q));
   }
@@ -635,6 +694,10 @@ const filteredPatternSuggestions = computed(() => {
 });
 
 const fetchRunningContainers = async () => {
+  if (!dockerEnabled()) {
+    fleetContainers.value = [];
+    return;
+  }
   try {
     const res = await apiFetch("/api/containers", {
       headers: { Authorization: `Bearer ${props.token}` },
@@ -644,15 +707,55 @@ const fetchRunningContainers = async () => {
     }
   } catch (err) {
     console.error(err);
-  } finally {
-    containersLoaded.value = true;
   }
+};
+
+const fetchK8sFleet = async () => {
+  if (!kubernetesEnabled()) {
+    k8sFleetNames.value = [];
+    return;
+  }
+  try {
+    const nsRes = await apiFetch("/api/namespaces", {
+      headers: { Authorization: `Bearer ${props.token}` },
+    });
+    if (!nsRes.ok) {
+      k8sFleetNames.value = [];
+      return;
+    }
+    const namespaces = await nsRes.json();
+    const names = new Set(namespaces.map((ns) => ns.name));
+    const podLists = await Promise.all(
+      namespaces.map(async ({ name }) => {
+        const res = await apiFetch(
+          `/api/pods?namespace=${encodeURIComponent(name)}`,
+          { headers: { Authorization: `Bearer ${props.token}` } },
+        );
+        if (!res.ok) return [];
+        return res.json();
+      }),
+    );
+    podLists.flat().forEach((pod) => {
+      names.add(pod.namespace);
+      names.add(`${pod.namespace}/${pod.name}`);
+    });
+    k8sFleetNames.value = [...names].sort((a, b) => a.localeCompare(b));
+  } catch (err) {
+    console.error(err);
+    k8sFleetNames.value = [];
+  }
+};
+
+const fetchFleetResources = async () => {
+  fleetLoaded.value = false;
+  await Promise.all([fetchRunningContainers(), fetchK8sFleet()]);
+  fleetLoaded.value = true;
 };
 
 const onPatternFocus = () => {
   clearTimeout(patternBlurTimer);
   patternSuggestionsOpen.value = true;
-  fetchRunningContainers();
+  fetchFleetResources();
 };
 
 const hidePatternSuggestions = () => {
@@ -699,8 +802,9 @@ const closeAllModals = () => {
   resetTargetUser.value = null;
   patternSuggestionsOpen.value = false;
   fleetExpanded.value = false;
-  containersLoaded.value = false;
+  fleetLoaded.value = false;
   fleetContainers.value = [];
+  k8sFleetNames.value = [];
 };
 
 const fetchStaff = async () => {
@@ -803,8 +907,8 @@ const toggleUserStatus = async (user) => {
 const openPermissions = (user) => {
   editingUser.value = JSON.parse(JSON.stringify(user));
   showPermissionsModal.value = true;
-  containersLoaded.value = false;
-  if (editingUser.value.is_restricted_access) fetchRunningContainers();
+  fleetLoaded.value = false;
+  if (editingUser.value.is_restricted_access) fetchFleetResources();
 };
 
 const openResetPassword = (user) => {
@@ -906,7 +1010,7 @@ const confirmDelete = async () => {
 
 const openCreateModal = () => {
   showCreateModal.value = true;
-  containersLoaded.value = false;
+  fleetLoaded.value = false;
 };
 defineExpose({ openCreateModal });
 onMounted(fetchStaff);
@@ -1157,6 +1261,13 @@ onMounted(fetchStaff);
 
 .perm-section {
   margin-bottom: 1.35rem;
+}
+
+.visibility-hint {
+  margin: 0.35rem 0 0.75rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--text-dim);
 }
 
 .perm-section:last-child {

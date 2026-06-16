@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { secureStorage, parseJwt } from '../utils/storage';
-import { sharedState } from '../utils/sharedState';
+import { sharedState, dockerEnabled, kubernetesEnabled } from '../utils/sharedState';
 import { apiFetch } from '../utils/apiFetch';
 
 const routes = [
@@ -15,13 +15,29 @@ const routes = [
     path: '/containers', 
     name: 'Containers', 
     component: () => import('../views/Containers.vue'),
-    meta: { requiresAuth: true, layout: 'main', title: 'Container Management' }
+    meta: { requiresAuth: true, layout: 'main', title: 'Container Management', requiresDocker: true }
+  },
+  {
+    path: '/kubernetes',
+    name: 'Kubernetes',
+    component: () => import('../views/Kubernetes.vue'),
+    meta: { requiresAuth: true, layout: 'main', title: 'Kubernetes', requiresKubernetes: true }
+  },
+  {
+    path: '/pods',
+    redirect: (to) => ({ path: '/kubernetes', query: { ...to.query, tab: to.query.tab || 'pods' } }),
   },
   {
     path: '/containers/:id',
     name: 'ContainerDetail',
     component: () => import('../views/ContainerDetail.vue'),
-    meta: { requiresAuth: true, layout: 'main', title: 'Container Details' }
+    meta: { requiresAuth: true, layout: 'main', title: 'Container Details', requiresDocker: true }
+  },
+  {
+    path: '/kubernetes/pods/:namespace/:pod',
+    name: 'PodDetail',
+    component: () => import('../views/PodDetail.vue'),
+    meta: { requiresAuth: true, layout: 'main', title: 'Pod Details', requiresKubernetes: true }
   },
   { 
     path: '/logs', 
@@ -102,6 +118,11 @@ router.beforeEach(async (to, from, next) => {
         sharedState.envRestartPermission = data.allow_restart !== false;
         sharedState.envDeletePermission = data.allow_delete !== false;
         sharedState.envShellPermission = data.allow_shell === true;
+        sharedState.runtimeMode = data.runtime_mode || 'docker';
+        sharedState.k8sNamespaces = Array.isArray(data.k8s_namespaces) ? data.k8s_namespaces : [];
+        sharedState.k8sDefaultNs = data.k8s_default_ns || 'default';
+        sharedState.k8sAvailable = data.k8s_available === true;
+        sharedState.k8sError = data.k8s_error || '';
       }
     } catch (e) {
       console.error('Failed to load auth config:', e);
@@ -135,6 +156,10 @@ router.beforeEach(async (to, from, next) => {
     next('/login');
   } else if (to.meta.requiresAdmin && !isAdmin) {
     next('/dashboard');
+  } else if (to.meta.requiresDocker && !dockerEnabled()) {
+    next(kubernetesEnabled() ? '/kubernetes' : '/dashboard');
+  } else if (to.meta.requiresKubernetes && !kubernetesEnabled()) {
+    next(dockerEnabled() ? '/containers' : '/dashboard');
   } else if (
     to.meta.requiresAdmin &&
     sharedState.currentUser?.password_changed === false

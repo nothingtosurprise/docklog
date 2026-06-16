@@ -43,134 +43,136 @@
 
       <div class="sidebar-header">
         <span class="label-caps">Log Resources</span>
-        <div class="sidebar-controls">
-          <!-- Theme Toggle -->
-          <button
-            class="mini-icon-btn"
-            @click="toggleTheme"
-            data-tooltip="Toggle Theme"
-          >
-            <svg
-              v-if="sharedState.theme === 'dark'"
-              viewBox="0 0 24 24"
-              width="12"
-              height="12"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="3"
+        <div class="sidebar-header-row">
+          <div v-if="showRuntimeToggle" class="runtime-toggle">
+            <button
+              class="runtime-btn"
+              :class="{ active: activeRuntime === 'docker' }"
+              @click="setRuntime('docker')"
             >
-              <circle cx="12" cy="12" r="5"></circle>
-              <line x1="12" y1="1" x2="12" y2="3"></line>
-              <line x1="12" y1="21" x2="12" y2="23"></line>
-              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-              <line x1="1" y1="12" x2="3" y2="12"></line>
-              <line x1="21" y1="12" x2="23" y2="12"></line>
-              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-            </svg>
-            <svg
-              v-else
-              viewBox="0 0 24 24"
-              width="12"
-              height="12"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="3"
+              Docker
+            </button>
+            <button
+              class="runtime-btn"
+              :class="{ active: activeRuntime === 'kubernetes' }"
+              @click="setRuntime('kubernetes')"
             >
-              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-            </svg>
-          </button>
+              Kubernetes
+            </button>
+          </div>
+          <div class="sidebar-controls">
+            <button
+              class="mini-icon-btn"
+              @click="isSidebarHidden = true"
+              data-tooltip="Collapse Sidebar"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                width="12"
+                height="12"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="3"
+              >
+                <polyline points="15 18 9 12 15 6"></polyline>
+              </svg>
+            </button>
 
-          <!-- Collapse Toggle -->
-          <button
-            class="mini-icon-btn"
-            @click="isSidebarHidden = true"
-            data-tooltip="Collapse Sidebar"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              width="12"
-              height="12"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="3"
+            <button
+              class="mini-icon-btn hide-mobile"
+              :class="{ 'active-toggle': splitView }"
+              @click="toggleSplitView"
+              :data-tooltip="
+                splitView ? 'Disable Split View' : 'Enable Split View'
+              "
             >
-              <polyline points="15 18 9 12 15 6"></polyline>
-            </svg>
-          </button>
-
-          <!-- Split View Toggle (Hide on mobile) -->
-          <button
-            class="mini-icon-btn hide-mobile"
-            :class="{ 'active-toggle': splitView }"
-            @click="toggleSplitView"
-            :data-tooltip="
-              splitView ? 'Disable Split View' : 'Enable Split View'
-            "
-          >
-            <svg
-              viewBox="0 0 24 24"
-              width="12"
-              height="12"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="3"
-            >
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-              <line x1="12" y1="3" x2="12" y2="21"></line>
-            </svg>
-          </button>
+              <svg
+                viewBox="0 0 24 24"
+                width="12"
+                height="12"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="3"
+              >
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="12" y1="3" x2="12" y2="21"></line>
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 
       <div class="resource-list">
-        <div
-          v-for="c in filteredContainers"
-          :key="c.id"
-          class="resource-card group"
-          :class="{ active: isVisible(c.id) }"
-          @click="toggleStream(c.id)"
-          @mouseenter="startLiveStats(c.id)"
-          @mouseleave="stopLiveStats"
-        >
-          <!-- Status dot indicator -->
-          <div class="card-status-dot" :class="c.state"></div>
-          <div class="card-info">
-            <span class="card-name">{{ c.name }}</span>
-            <span class="card-image-tag">{{ c.image }}</span>
-          </div>
+        <template v-if="dockerEnabled() && activeRuntime === 'docker'">
+          <div v-if="kubernetesEnabled()" class="resource-section-label">Docker</div>
+          <div
+            v-for="c in filteredContainers"
+            :key="c.id"
+            class="resource-card group"
+            :class="{ active: isContainerVisible(c.id) }"
+            @click="toggleContainerStream(c.id)"
+            @mouseenter="startLiveStats(c.id)"
+            @mouseleave="stopLiveStats"
+          >
+            <div class="card-status-dot" :class="c.state"></div>
+            <div class="card-info">
+              <span class="card-name">{{ c.name }}</span>
+              <span class="card-image-tag">{{ c.image }}</span>
+            </div>
 
-          <!-- Stats Peek (Only for running) -->
-          <div v-if="c.state === 'running'" class="stats-peek-inline">
-            <div class="peek-stat">
-              <span
-                class="p-value"
-                :class="{ 'text-live': activeLiveId === c.id }"
-              >
-                {{
-                  (activeLiveId === c.id ? liveStats.cpu : c.cpu)?.toFixed(2) ||
-                  "0.00"
-                }}%
-              </span>
-            </div>
-            <div class="peek-stat">
-              <span
-                class="p-value"
-                :class="{ 'text-live': activeLiveId === c.id }"
-              >
-                {{
-                  formatBytes(
-                    activeLiveId === c.id ? liveStats.memory : c.memory,
-                  )
-                }}
-              </span>
+            <div v-if="c.state === 'running'" class="stats-peek-inline">
+              <div class="peek-stat">
+                <span
+                  class="p-value"
+                  :class="{ 'text-live': activeLiveId === c.id }"
+                >
+                  {{
+                    (activeLiveId === c.id ? liveStats.cpu : c.cpu)?.toFixed(2) ||
+                    "0.00"
+                  }}%
+                </span>
+              </div>
+              <div class="peek-stat">
+                <span
+                  class="p-value"
+                  :class="{ 'text-live': activeLiveId === c.id }"
+                >
+                  {{
+                    formatBytes(
+                      activeLiveId === c.id ? liveStats.memory : c.memory,
+                    )
+                  }}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
-        <div v-if="filteredContainers.length === 0" class="empty-search-msg">
-          <p class="text-mute">No containers found</p>
-        </div>
+          <div v-if="filteredContainers.length === 0" class="empty-search-msg">
+            <p class="text-mute">No containers found</p>
+          </div>
+        </template>
+
+        <template v-if="kubernetesEnabled() && activeRuntime === 'kubernetes'">
+          <div v-if="dockerEnabled()" class="resource-section-label">Kubernetes</div>
+          <div
+            v-for="pod in filteredPods"
+            :key="podKey(pod)"
+            class="resource-card group"
+            :class="{ active: isPodVisible(pod) }"
+            @click="togglePodStream(pod)"
+          >
+            <div class="card-status-dot" :class="(pod.phase || '').toLowerCase()"></div>
+            <div class="card-info">
+              <span class="card-name">{{ pod.name }}</span>
+              <span class="card-image-tag">{{ pod.namespace }}</span>
+            </div>
+            <div class="stats-peek-inline">
+              <span class="p-value">{{ pod.ready }}</span>
+            </div>
+          </div>
+          <div v-if="filteredPods.length === 0" class="empty-search-msg">
+            <p class="text-mute">No pods found</p>
+          </div>
+        </template>
       </div>
     </aside>
 
@@ -202,16 +204,17 @@
     <!-- MAIN VIEWPORT -->
     <main class="logs-main-content">
       <div
-        v-if="displayContainers.length > 0"
+        v-if="displayStreams.length > 0"
         class="logs-grid"
         :class="gridClass"
       >
         <LogViewer
-          v-for="c in displayContainers"
-          :key="c.id"
-          :container="c"
+          v-for="stream in displayStreams"
+          :key="stream.key"
+          :container="stream.type === 'container' ? stream.data : undefined"
+          :pod="stream.type === 'pod' ? stream.data : undefined"
           showClose
-          @close="removeStream(c.id)"
+          @close="removeStream(stream)"
           @stats="handleViewerStats"
         />
       </div>
@@ -242,7 +245,7 @@
             <h2 class="display-title">Ready for Insight?</h2>
             <p class="subtitle">
               Select a resource from the sidebar to launch a real-time log
-              stream. Toggle split-view to monitor up to two containers
+              stream. Toggle split-view to monitor up to two resources
               simultaneously.
             </p>
             <div class="hero-actions" v-if="isSidebarHidden">
@@ -273,7 +276,9 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { sharedState, showToast, fetchCurrentUser, toggleTheme } from "../utils/sharedState";
+import { sharedState, dockerEnabled, kubernetesEnabled } from "../utils/sharedState";
+import { parsePodKey } from "../utils/logRoutes";
+import { usePods } from "../composables/usePods";
 import { secureStorage } from "../utils/storage";
 import { apiFetch } from "../utils/apiFetch";
 import LogViewer from "../components/LogViewer.vue";
@@ -290,6 +295,9 @@ const formatBytes = (bytes) => {
 };
 
 const containers = ref([]);
+const { pods } = usePods({ autoPoll: false });
+
+const podKey = (pod) => `${pod.namespace}/${pod.name}`;
 
 // Live Stats on Hover Logic
 const activeLiveId = ref(null);
@@ -337,31 +345,63 @@ const filteredContainers = computed(() => {
     (c) => c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q),
   );
 });
-const selectedIds = ref([]);
+const filteredPods = computed(() => {
+  if (!sharedState.searchQuery) return pods.value;
+  const q = sharedState.searchQuery.toLowerCase();
+  return pods.value.filter(
+    (pod) =>
+      pod.name.toLowerCase().includes(q) ||
+      pod.namespace.toLowerCase().includes(q) ||
+      (pod.images || []).some((image) => image.toLowerCase().includes(q)),
+  );
+});
+
+const selectedContainerIds = ref([]);
+const selectedPodKeys = ref([]);
 const isSidebarHidden = ref(window.innerWidth < 1024);
 const splitView = ref(route.query.split === "true");
+const activeRuntime = ref(dockerEnabled() ? "docker" : "kubernetes");
+
+const showRuntimeToggle = computed(
+  () => dockerEnabled() && kubernetesEnabled(),
+);
 
 const syncStateFromUrl = () => {
-  const urlParam = route.query.c;
-  if (!urlParam) {
-    selectedIds.value = [];
-    return;
-  }
-  const urlIds = urlParam.split(",").filter(Boolean);
-  selectedIds.value = urlIds;
+  const containerParam = route.query.c;
+  const podParam = route.query.p;
+
+  selectedContainerIds.value = containerParam
+    ? String(containerParam).split(",").filter(Boolean)
+    : [];
+  selectedPodKeys.value = podParam
+    ? String(podParam).split(",").filter(Boolean)
+    : [];
+
   splitView.value = route.query.split === "true";
-  console.log("[Logs] Synced IDs from URL:", selectedIds.value);
+  if (showRuntimeToggle.value) {
+    const rt = String(route.query.rt || "").toLowerCase();
+    if (rt === "kubernetes" || rt === "docker") {
+      activeRuntime.value = rt;
+    } else if (selectedPodKeys.value.length > 0) {
+      activeRuntime.value = "kubernetes";
+    } else if (selectedContainerIds.value.length > 0) {
+      activeRuntime.value = "docker";
+    } else {
+      activeRuntime.value = dockerEnabled() ? "docker" : "kubernetes";
+    }
+  } else {
+    activeRuntime.value = dockerEnabled() ? "docker" : "kubernetes";
+  }
 };
 
-// Ensure we match containers even if short IDs are provided in the URL
 const displayContainers = computed(() => {
-  if (containers.value.length === 0) return [];
+  if (containers.value.length === 0 || selectedContainerIds.value.length === 0) {
+    return [];
+  }
 
-  const ordered = selectedIds.value
+  const ordered = selectedContainerIds.value
     .map((id) => {
-      // Try exact match first
       let match = containers.value.find((c) => c.id === id);
-      // Fallback: match by prefix (handle short IDs)
       if (!match) {
         match = containers.value.find(
           (c) => c.id.startsWith(id) || id.startsWith(c.id),
@@ -371,24 +411,59 @@ const displayContainers = computed(() => {
     })
     .filter(Boolean);
 
-  return splitView.value
-    ? ordered.slice(-2)
-    : [ordered[ordered.length - 1]].filter(Boolean);
+  return splitView.value ? ordered.slice(-2) : [ordered[ordered.length - 1]].filter(Boolean);
+});
+
+const displayPods = computed(() => {
+  if (selectedPodKeys.value.length === 0) {
+    return [];
+  }
+
+  const ordered = selectedPodKeys.value
+    .map((key) => {
+      const match = pods.value.find((pod) => podKey(pod) === key);
+      if (match) return match;
+      const parsed = parsePodKey(key);
+      if (!parsed) return null;
+      return { ...parsed, phase: "", ready: "", images: [] };
+    })
+    .filter(Boolean);
+
+  return splitView.value ? ordered.slice(-2) : [ordered[ordered.length - 1]].filter(Boolean);
+});
+
+const displayStreams = computed(() => {
+  const streams = [
+    ...displayContainers.value.map((container) => ({
+      type: "container",
+      key: `container:${container.id}`,
+      data: container,
+    })),
+    ...displayPods.value.map((pod) => ({
+      type: "pod",
+      key: `pod:${podKey(pod)}`,
+      data: pod,
+    })),
+  ];
+  return splitView.value ? streams.slice(-2) : streams.slice(-1);
 });
 
 watch(
-  () => containers.value,
+  () => [containers.value, pods.value],
   () => {
-    if (selectedIds.value.length > 0) {
-      console.log("[Logs] Containers loaded, applying selection from URL");
+    if (selectedContainerIds.value.length > 0 || selectedPodKeys.value.length > 0) {
+      syncStateFromUrl();
     }
   },
   { immediate: true },
 );
 
-const isVisible = (id) => displayContainers.value.some((c) => c.id === id);
+const isContainerVisible = (id) =>
+  displayContainers.value.some((c) => c.id === id);
+const isPodVisible = (pod) =>
+  displayPods.value.some((item) => podKey(item) === podKey(pod));
 const gridClass = computed(() =>
-  displayContainers.value.length > 1 ? "grid-dual" : "grid-single",
+  displayStreams.value.length > 1 ? "grid-dual" : "grid-single",
 );
 
 const fetchContainers = async () => {
@@ -399,20 +474,93 @@ const fetchContainers = async () => {
     });
     if (res.ok) {
       containers.value = await res.json();
-      syncStateFromUrl();
     }
   } catch (err) {
     console.error(err);
   }
 };
 
+const fetchPodsForLogs = async () => {
+  if (!kubernetesEnabled()) return;
+  try {
+    const token = secureStorage.getItem("token");
+    const nsRes = await apiFetch("/api/namespaces", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!nsRes.ok) return;
+    const namespaces = await nsRes.json();
+    const results = await Promise.all(
+      namespaces.map(async ({ name }) => {
+        const res = await apiFetch(
+          `/api/pods?namespace=${encodeURIComponent(name)}`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+        if (!res.ok) return [];
+        return res.json();
+      }),
+    );
+    pods.value = results.flat();
+  } catch (err) {
+    console.error(err);
+  }
+};
+
+const fetchResources = async () => {
+  const tasks = [];
+  if (dockerEnabled()) tasks.push(fetchContainers());
+  if (kubernetesEnabled()) tasks.push(fetchPodsForLogs());
+  await Promise.all(tasks);
+  syncStateFromUrl();
+  ensureUrlReflectsSelection();
+};
+
+const ensureUrlReflectsSelection = () => {
+  if (!showRuntimeToggle.value) return;
+
+  const expectedRt =
+    selectedPodKeys.value.length > 0
+      ? "kubernetes"
+      : selectedContainerIds.value.length > 0
+        ? "docker"
+        : activeRuntime.value;
+
+  const expectedP =
+    selectedPodKeys.value.length > 0
+      ? selectedPodKeys.value.join(",")
+      : "";
+  const expectedC =
+    selectedContainerIds.value.length > 0
+      ? selectedContainerIds.value.join(",")
+      : "";
+
+  const currentRt = String(route.query.rt || "");
+  const currentP = String(route.query.p || "");
+  const currentC = String(route.query.c || "");
+
+  if (
+    currentRt !== expectedRt ||
+    (expectedP && currentP !== expectedP) ||
+    (expectedC && currentC !== expectedC) ||
+    (!expectedP && currentP) ||
+    (!expectedC && currentC)
+  ) {
+    updateUrl();
+  }
+};
+
 const updateUrl = () => {
   const query = { ...route.query };
 
-  if (selectedIds.value.length > 0) {
-    query.c = selectedIds.value.join(",");
+  if (selectedContainerIds.value.length > 0) {
+    query.c = selectedContainerIds.value.join(",");
   } else {
     delete query.c;
+  }
+
+  if (selectedPodKeys.value.length > 0) {
+    query.p = selectedPodKeys.value.join(",");
+  } else {
+    delete query.p;
   }
 
   if (splitView.value) {
@@ -421,7 +569,23 @@ const updateUrl = () => {
     delete query.split;
   }
 
+  if (showRuntimeToggle.value) {
+    query.rt = activeRuntime.value;
+  } else {
+    delete query.rt;
+  }
+
   router.replace({ query });
+};
+
+const setRuntime = (runtime) => {
+  if (!showRuntimeToggle.value) return;
+  if (runtime !== "docker" && runtime !== "kubernetes") return;
+  if (activeRuntime.value === runtime) return;
+  activeRuntime.value = runtime;
+  selectedContainerIds.value = [];
+  selectedPodKeys.value = [];
+  updateUrl();
 };
 
 const toggleSplitView = () => {
@@ -429,20 +593,19 @@ const toggleSplitView = () => {
   updateUrl();
 };
 
-const toggleStream = (id) => {
+const toggleContainerStream = (id) => {
   if (splitView.value) {
-    // SPLIT VIEW: FIFO Logic (Max 2)
-    if (selectedIds.value.includes(id)) {
-      selectedIds.value = selectedIds.value.filter((sid) => sid !== id);
+    if (selectedContainerIds.value.includes(id)) {
+      selectedContainerIds.value = selectedContainerIds.value.filter((sid) => sid !== id);
     } else {
-      if (selectedIds.value.length >= 2) {
-        selectedIds.value.shift();
+      if (selectedContainerIds.value.length >= 2) {
+        selectedContainerIds.value.shift();
       }
-      selectedIds.value.push(id);
+      selectedContainerIds.value.push(id);
     }
   } else {
-    // SINGLE VIEW: Replace selection entirely
-    selectedIds.value = selectedIds.value.includes(id) ? [] : [id];
+    selectedPodKeys.value = [];
+    selectedContainerIds.value = selectedContainerIds.value.includes(id) ? [] : [id];
   }
   if (window.innerWidth < 900) {
     isSidebarHidden.value = true;
@@ -450,24 +613,52 @@ const toggleStream = (id) => {
   updateUrl();
 };
 
-const removeStream = (id) => {
-  selectedIds.value = selectedIds.value.filter((sid) => sid !== id);
+const togglePodStream = (pod) => {
+  const key = podKey(pod);
+  if (splitView.value) {
+    if (selectedPodKeys.value.includes(key)) {
+      selectedPodKeys.value = selectedPodKeys.value.filter((sid) => sid !== key);
+    } else {
+      if (selectedPodKeys.value.length >= 2) {
+        selectedPodKeys.value.shift();
+      }
+      selectedPodKeys.value.push(key);
+    }
+  } else {
+    selectedContainerIds.value = [];
+    selectedPodKeys.value = selectedPodKeys.value.includes(key) ? [] : [key];
+  }
+  if (window.innerWidth < 900) {
+    isSidebarHidden.value = true;
+  }
+  updateUrl();
+};
+
+const removeStream = (stream) => {
+  if (stream.type === "container") {
+    selectedContainerIds.value = selectedContainerIds.value.filter(
+      (sid) => sid !== stream.data.id,
+    );
+  } else {
+    selectedPodKeys.value = selectedPodKeys.value.filter(
+      (sid) => sid !== podKey(stream.data),
+    );
+  }
   updateUrl();
 };
 
 let statusInterval = null;
 
 onMounted(() => {
-  fetchContainers();
-  // Real-time status heartbeat
-  statusInterval = setInterval(fetchContainers, 3000);
+  fetchResources();
+  statusInterval = setInterval(fetchResources, 5000);
 });
 
 onUnmounted(() => {
   if (statusInterval) clearInterval(statusInterval);
 });
 
-watch(() => route.query, syncStateFromUrl);
+watch(() => route.query, syncStateFromUrl, { immediate: true });
 </script>
 
 <style scoped>
@@ -477,6 +668,24 @@ watch(() => route.query, syncStateFromUrl);
   position: relative;
   overflow: hidden;
   background: var(--bg-main);
+}
+
+.resource-section-label {
+  margin: 0.75rem 0 0.35rem;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+}
+
+.card-status-dot.pending {
+  background: var(--warning);
+}
+
+.card-status-dot.failed,
+.card-status-dot.unknown {
+  background: var(--error);
 }
 
 /* SIDEBAR UI FIXES */
@@ -548,9 +757,10 @@ watch(() => route.query, syncStateFromUrl);
 
 .sidebar-header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 2rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
 }
 
 .label-caps {
@@ -688,7 +898,14 @@ watch(() => route.query, syncStateFromUrl);
   display: block;
 }
 
-/* SIDEBAR CONTROLS */
+.sidebar-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+}
+
 .mini-icon-btn {
   background: var(--bg-input);
   border: 1px solid var(--border);
@@ -707,6 +924,11 @@ watch(() => route.query, syncStateFromUrl);
   color: white !important;
   border-color: var(--accent) !important;
   box-shadow: 0 4px 14px rgba(var(--accent-rgb), 0.35);
+}
+
+.sidebar-controls {
+  display: flex;
+  gap: 0.5rem;
 }
 
 .sidebar-collapsed .resources-sidebar {
@@ -844,9 +1066,29 @@ watch(() => route.query, syncStateFromUrl);
   margin-bottom: 2rem;
 }
 
-.sidebar-controls {
-  display: flex;
-  gap: 0.5rem;
+.runtime-toggle {
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.2rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+}
+
+.runtime-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-mute);
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.runtime-btn.active {
+  background: var(--accent);
+  color: #fff;
 }
 
 @media (max-width: 1024px) {

@@ -3,6 +3,7 @@ import { useRouter } from 'vue-router';
 import { secureStorage } from '../utils/storage';
 import { sharedState, showToast, formatBytes } from '../utils/sharedState';
 import { apiFetch } from '../utils/apiFetch';
+import { logsRouteForContainer } from '../utils/logRoutes';
 
 const containers = ref([]);
 const loading = ref(true);
@@ -116,7 +117,7 @@ export function useContainers(options = {}) {
   };
 
   const goToLogs = (id) => {
-    router.push({ path: '/logs', query: { c: id } });
+    router.push(logsRouteForContainer(id));
   };
 
   const goToShell = (id) => {
