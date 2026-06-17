@@ -22,7 +22,7 @@ type procCPUStat struct {
 }
 
 func procStatPath() string {
-	if root := strings.TrimSpace(os.Getenv("HOST_PROC")); root != "" {
+	if root := hostProcRoot(); root != "" {
 		return filepath.Join(root, "stat")
 	}
 	return "/proc/stat"
@@ -67,31 +67,31 @@ func parseProcCPUStatLine(line string) (procCPUStat, error) {
 
 func sampleCPUPercent(interval time.Duration) (float64, error) {
 	start, err := readProcCPUStat()
-	if err != nil {
-		return sampleCPUPercentGopsutil(interval)
+	if err == nil {
+		time.Sleep(interval)
+		end, err := readProcCPUStat()
+		if err == nil {
+			totalDelta := end.total - start.total
+			if totalDelta > 0 {
+				idleDelta := end.idle - start.idle
+				busy := (1.0 - float64(idleDelta)/float64(totalDelta)) * 100.0
+				if busy < 0 {
+					return 0, nil
+				}
+				if busy > 100 {
+					return 100, nil
+				}
+				return busy, nil
+			}
+			return 0, nil
+		}
 	}
 
-	time.Sleep(interval)
-
-	end, err := readProcCPUStat()
-	if err != nil {
-		return sampleCPUPercentGopsutil(interval)
+	if value, ok := k8sHostCPUPercent(); ok {
+		return value, nil
 	}
 
-	totalDelta := end.total - start.total
-	if totalDelta == 0 {
-		return 0, nil
-	}
-
-	idleDelta := end.idle - start.idle
-	busy := (1.0 - float64(idleDelta)/float64(totalDelta)) * 100.0
-	if busy < 0 {
-		return 0, nil
-	}
-	if busy > 100 {
-		return 100, nil
-	}
-	return busy, nil
+	return sampleCPUPercentGopsutil(interval)
 }
 
 func sampleCPUPercentGopsutil(interval time.Duration) (float64, error) {

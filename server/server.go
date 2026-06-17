@@ -73,7 +73,6 @@ func (s *Server) Run(rt cli.Runtime) error {
 			s.deps.Docker = cli
 		}
 
-		stats.StartCollector(s.deps.Docker)
 		services.StartHealthMonitor(s.deps.Docker, audit.Log, s.deps.Alerts)
 		services.StartContainerEventMonitor(s.deps.Docker, audit.Log, s.deps.Alerts)
 		services.StartLogAlertMonitor(s.deps.Docker, s.deps.Alerts)
@@ -98,6 +97,10 @@ func (s *Server) Run(rt cli.Runtime) error {
 			services.StartK8sEventMonitor(s.deps.K8s, s.deps.Alerts)
 		}
 	}
+
+	stats.SetKubernetesClient(s.deps.K8s)
+	stats.StartCollector(s.deps.Docker)
+
 	seed.Admin()
 
 	s.registerAuthRoutes()
@@ -105,6 +108,7 @@ func (s *Server) Run(rt cli.Runtime) error {
 
 	api := s.echo.Group("/api")
 	s.setupAPIMiddleware(api)
+	s.registerSystemRoutes(api)
 	if config.DockerEnabled() {
 		s.registerContainerRoutes(api)
 	}

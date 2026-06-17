@@ -11,8 +11,6 @@ import (
 	"docklog/dockerutil"
 
 	"github.com/moby/moby/client"
-	"github.com/shirou/gopsutil/v3/cpu"
-	"github.com/shirou/gopsutil/v3/mem"
 )
 
 var (
@@ -60,27 +58,20 @@ func systemStatsBroadcaster() {
 }
 
 func updateSystemStatsSnapshot() {
-	v, _ := mem.VirtualMemory()
-	memUsed := v.Used
-	if v.Available > 0 && v.Total > v.Available {
-		memUsed = v.Total - v.Available
-	}
+	totalMemory, memUsed := systemMemory()
 
 	cpuVal := 0.0
 	if sample, err := sampleCPUPercent(systemSampleInterval); err == nil {
 		cpuVal = smoothCPU(sample)
 	}
 
-	cores, err := cpu.Counts(true)
-	if err != nil || cores == 0 {
-		cores = runtime.NumCPU()
-	}
+	cores := systemLogicalCPUs()
 
 	sysStatsMu.Lock()
 	latestSystemStats = map[string]interface{}{
 		"cpu":          cpuVal,
 		"memory":       memUsed,
-		"total_memory": v.Total,
+		"total_memory": totalMemory,
 		"cores":        cores,
 	}
 	sysStatsMu.Unlock()
@@ -120,6 +111,10 @@ func collectStats(cli *client.Client) {
 	}
 	if memUsed > 0 || cpuVal > 0 {
 		db.DB.Exec("INSERT INTO system_stats (cpu, memory) VALUES (?, ?)", cpuVal, memUsed)
+	}
+
+	if cli == nil {
+		return
 	}
 
 	res, _ := cli.ContainerList(context.Background(), client.ContainerListOptions{})

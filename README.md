@@ -229,6 +229,7 @@ When `RUNTIME_MODE` is `kubernetes` or `both`:
 | `ALLOW_DELETE`       | Allow delete action                                                                                     | `false`                       |
 | `ALLOW_SHELL`        | Allow interactive shell over WebSocket (`ALLOW_BASH` is an alias)                                       | `false`                       |
 | `EXCLUDE_CONTAINERS` | Comma-separated container names to hide from the dashboard                                              | _(empty)_                     |
+| `HOST_PROC`          | Host `/proc` mount path for real host CPU/RAM stats inside Docker (e.g. `/host/proc`)                   | auto (`/host/proc` if mounted) |
 
 The DockLog container itself is **always hidden** (matched by name `docklog` or image containing `docklog`).
 
