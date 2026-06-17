@@ -4,12 +4,14 @@ on:
   push:
     branches:
       - main
-      - 'stable/*'
+      - beta
+      - beta/*
+      - "stable/*"
     paths-ignore:
-      - 'README.md'
-      - 'docs/**'
-      - '.gitignore'
-      - 'LICENSE'
+      - "README.md"
+      - "docs/**"
+      - ".gitignore"
+      - "LICENSE"
 
 # Prevent multiple builds from running concurrently on the same branch
 concurrency:
@@ -35,7 +37,7 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-          
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -51,8 +53,12 @@ jobs:
             # Tag 'latest' and 'stable' when pushing to the main branch
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=raw,value=stable,enable=${{ github.ref == 'refs/heads/main' }}
+            # Tag 'beta' when pushing to the beta or beta/* branches
+            type=raw,value=beta,enable=${{ startsWith(github.ref, 'refs/heads/beta') }}
             # Extract the version from 'stable/*' branches (e.g., stable/1.0.0 -> 1.0.0)
             type=match,pattern=stable/(.*),group=1
+            # Extract the version from 'beta/*' branches (e.g., beta/1.0.0 -> beta-1.0.0)
+            type=match,pattern=beta/(.*),group=1,prefix=beta-
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
