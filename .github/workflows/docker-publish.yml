@@ -9,6 +9,8 @@ on:
       - "stable/*"
     paths-ignore:
       - "README.md"
+      - "assets/**"
+      - ".github/workflows/**"
       - "docs/**"
       - ".gitignore"
       - "LICENSE"

@@ -1,10 +1,34 @@
-# K8S_NAMESPACESDockLog 🐳
+# DockLog 🐳
 
-**High-performance, real-time Docker log viewer built for teams.**
+<p align="center">
+  <img src="frontend/public/logo-horizontal.png?v=2" alt="DockLog Logo" height="80">
+</p>
 
-Lightweight. Secure. Modern. Built for real-world Docker environments.
+<p align="center">
+  <strong>High-performance, real-time Docker log viewer built for teams.</strong>
+</p>
 
-DockLog provides real-time log streaming, RBAC, audit logging, system monitoring, and container management in a clean modern interface.
+<p align="center">
+  <a href="https://www.docklog.dev">Official Website</a> |
+  <a href="https://www.docklog.dev/docs">Online Documentation</a>
+</p>
+
+<p align="center">
+  Lightweight. Secure. Modern. Built for real-world Docker environments.
+</p>
+
+<p align="center">
+  DockLog provides real-time log streaming, RBAC, audit logging, system monitoring, Docker container management, and optional Kubernetes visibility in a clean modern interface.
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/docker/pulls/aimldev/docklog" alt="Docker Pulls">
+  <img src="https://img.shields.io/github/license/dockloghq/docklog" alt="License">
+  <img src="https://img.shields.io/badge/version-1.0.0-0891b2" alt="Version">
+  <img src="https://img.shields.io/badge/Backend-Go-00add8" alt="Backend">
+  <img src="https://img.shields.io/badge/Frontend-Vue--3-42b883" alt="Frontend">
+  <img src="https://img.shields.io/github/stars/dockloghq/docklog?style=social" alt="GitHub Stars">
+</p>
 
 ---
 
@@ -18,7 +42,9 @@ DockLog focuses on fast deployment, low resource usage, and team-safe Docker vis
 
 ## 📊 Dashboard
 
-Dashboard
+<p align="center">
+  <img src="assets/dashboard.webp" alt="Dashboard" style="max-height: 400px; height: auto; width: auto;">
+</p>
 
 Real-time Docker monitoring with lightweight system metrics and container controls.
 
@@ -26,7 +52,9 @@ Real-time Docker monitoring with lightweight system metrics and container contro
 
 ## 🐳 Container Management
 
-Containers
+<p align="center">
+  <img src="assets/containers.webp" alt="Containers" style="max-height: 400px; height: auto; width: auto;">
+</p>
 
 Monitor, control, and manage containers with fast operational actions.
 
@@ -34,7 +62,9 @@ Monitor, control, and manage containers with fast operational actions.
 
 ## 📜 Real-Time Logs
 
-Logs
+<p align="center">
+  <img src="assets/logs.webp" alt="Logs" style="max-height: 400px; height: auto; width: auto;">
+</p>
 
 Stream container logs live with search, highlighting, and multi-container layout.
 
@@ -42,7 +72,9 @@ Stream container logs live with search, highlighting, and multi-container layout
 
 ## 📈 System Health
 
-System Health
+<p align="center">
+  <img src="assets/health.webp" alt="System Health" style="max-height: 400px; height: auto; width: auto;">
+</p>
 
 Historical CPU and memory charts with configurable time ranges.
 
@@ -50,7 +82,9 @@ Historical CPU and memory charts with configurable time ranges.
 
 ## 🔐 RBAC & Staff Management
 
-RBAC
+<p align="center">
+  <img src="assets/rbac.webp" alt="RBAC" style="max-height: 400px; height: auto; width: auto;">
+</p>
 
 Granular container-level permissions with wildcard and regex-based access control.
 
@@ -58,9 +92,41 @@ Granular container-level permissions with wildcard and regex-based access contro
 
 ## 🕵️ Security Audit Logs
 
-Audit Logs
+<p align="center">
+  <img src="assets/audit-logs.webp" alt="Audit Logs" style="max-height: 400px; height: auto; width: auto;">
+</p>
 
 Track administrative actions and security events with a complete audit trail.
+
+---
+
+## 🔔 Notifications
+
+<p align="center">
+  <img src="assets/notification.webp" alt="Notifications" style="max-height: 400px; height: auto; width: auto;">
+</p>
+
+Route events to Slack, Microsoft Teams, Discord, or a custom HTTPS webhook with per-channel filters.
+
+---
+
+## 🚨 Alert Rules
+
+<p align="center">
+  <img src="assets/alerts.webp" alt="Alert Rules" style="max-height: 400px; height: auto; width: auto;">
+</p>
+
+Monitor containers with configurable rules for CPU, memory, restarts, and offline detection.
+
+---
+
+## ➕ Create Alert
+
+<p align="center">
+  <img src="assets/new-alert.webp" alt="Create Alert" style="max-height: 400px; height: auto; width: auto;">
+</p>
+
+Define thresholds, severity, cooldowns, and notification channels for each alert rule.
 
 ---
 
@@ -88,7 +154,7 @@ Most Docker log viewers are built for a single administrator. DockLog is built f
 
 ## 🔐 Advanced RBAC
 
-- Wildcard permissions (`backend-`*) and full regex (`^prod-.*$`)
+- Wildcard permissions (`backend-*`) and full regex (`^prod-.*$`)
 - Per-user start / stop / restart / delete rights
 - Staff management and container-level isolation
 
@@ -102,6 +168,15 @@ Most Docker log viewers are built for a single administrator. DockLog is built f
 - Full audit trail for sensitive actions
 
 See [Security & RBAC](docs/SECURITY.md) for details.
+
+## ☸️ Kubernetes (optional)
+
+When `RUNTIME_MODE` is `kubernetes` or `both`:
+
+- Namespace-scoped pod list, detail views, live logs, and shell access
+- Workload hub for deployments, HPAs, services, and cluster events
+- Namespace allowlist via `K8S_NAMESPACES`
+- Graceful startup when the cluster is unreachable (UI shows connection status)
 
 ## 🎨 Modern UI
 
@@ -125,25 +200,9 @@ See [Security & RBAC](docs/SECURITY.md) for details.
 
 ---
 
-# 🛠 Tech Stack
-
-
-| Layer            | Technology                |
-| ---------------- | ------------------------- |
-| Backend          | Go + Echo                 |
-| Frontend         | Vue 3 + Vite              |
-| Streaming        | WebSockets                |
-| Database         | SQLite                    |
-| Container Engine | Docker SDK                |
-| Styling          | Vanilla CSS design system |
-
-
----
-
 # ⚙️ Configuration
 
 ## Environment Variables
-
 
 | Variable             | Description                                                                                             | Default                       |
 | -------------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------- |
@@ -152,33 +211,41 @@ See [Security & RBAC](docs/SECURITY.md) for details.
 | `PORT`               | HTTP listen port                                                                                        | `8000`                        |
 | `DOCKER_HOST`        | Docker daemon socket                                                                                    | `unix:///var/run/docker.sock` |
 | `RUNTIME_MODE`       | Runtime backend mode (`docker`, `kubernetes`, `both`). Controls which APIs and UI sections are enabled. | `docker`                      |
-| `K8S_NAMESPACES`     | Comma-separated namespace allowlist. Empty = all namespaces allowed by cluster RBAC.                    | *(empty)*                     |
-| `K8S_CONTEXT`        | Kubernetes context override                                                                             | *(empty)*                     |
-| `KUBECONFIG`         | Path to kubeconfig                                                                                      | *(empty)*                     |
-| `DISABLE_AUTH`       | Disable auth (in-memory DB, no login)                                                                   | `false`                       |
+| `K8S_NAMESPACES`              | Comma-separated namespace allowlist. Empty = all namespaces allowed by cluster RBAC.                    | _(empty)_                     |
+| `K8S_CONTEXT`                 | Kubernetes context override                                                                             | _(empty)_                     |
+| `KUBECONFIG`                  | Path to kubeconfig                                                                                      | _(empty)_                     |
+| `K8S_API_SERVER`              | Override Kubernetes API server URL from kubeconfig                                                      | _(empty)_                     |
+| `K8S_REWRITE_LOCALHOST`       | Rewrite `127.0.0.1` / `localhost` in kubeconfig to `host.docker.internal` when running in Docker        | auto (`true` in Docker)       |
+| `K8S_INSECURE_SKIP_TLS_VERIFY`| Skip TLS verification for the Kubernetes API (local/dev only)                                         | `false`                       |
+| `DISABLE_AUTH`                | Disable auth (in-memory DB, no login). `NO_AUTH=true` is an alias.                                      | `false`                       |
 | `CLIENT_ACCESS`      | Restrict `/api` and `/ws` to web UI + native clients (`strict` or `off`)                                | `strict`                      |
-| `ALLOWED_ORIGINS`    | Extra browser origins for the Vue UI (comma-separated URLs)                                             | *(empty)*                     |
-| `TRUST_PROXY`        | Honor `X-Forwarded-`* headers when behind a reverse proxy                                               | `false`                       |
+| `ALLOWED_ORIGINS`    | Extra browser origins for the Vue UI (comma-separated URLs)                                             | _(empty)_                     |
+| `TRUST_PROXY`        | Honor `X-Forwarded-`\* headers when behind a reverse proxy                                              | `false`                       |
 | `DEBUG_MODE`         | Enable verbose internal debug logs in container output                                                  | `false`                       |
-| `ENV`                | Set to `production` to disable localhost origin bypass                                                  | *(empty)*                     |
+| `ENV`                | Set to `production` to disable localhost origin bypass                                                  | _(empty)_                     |
 | `ALLOW_START`        | Allow start action (no-auth mode env flags)                                                             | `false`                       |
 | `ALLOW_STOP`         | Allow stop action                                                                                       | `false`                       |
 | `ALLOW_RESTART`      | Allow restart action                                                                                    | `false`                       |
 | `ALLOW_DELETE`       | Allow delete action                                                                                     | `false`                       |
 | `ALLOW_SHELL`        | Allow interactive shell over WebSocket (`ALLOW_BASH` is an alias)                                       | `false`                       |
-| `EXCLUDE_CONTAINERS` | Comma-separated container names to hide from the dashboard                                              | *(empty)*                     |
-
+| `EXCLUDE_CONTAINERS` | Comma-separated container names to hide from the dashboard                                              | _(empty)_                     |
 
 The DockLog container itself is **always hidden** (matched by name `docklog` or image containing `docklog`).
 
-### Notifications (Slack, Teams, Discord)
+### Notifications (Slack, Teams, Discord, Custom webhooks)
 
-Configure alerts from **Admin → Notifications** in the UI. Webhook URLs are stored in SQLite; there are no environment variables for notification delivery.
+Configure notifications from **Admin → Notifications** in the UI. Webhook URLs are stored in SQLite; there are no environment variables for notification delivery.
 
 - **Master switch** turns delivery on or off for all channels.
-- **Per channel** (Slack, Microsoft Teams, Discord): webhook URL, enable/disable, and event filters.
+- **Per channel** (Slack, Microsoft Teams, Discord, **Custom webhook**): webhook URL, enable/disable, and event filters.
+- **Custom webhook** — POST JSON to any HTTPS endpoint (PagerDuty, n8n, Zapier, your own service). Set a display name and webhook URL in the UI.
 - **Event types** (chosen per channel): container actions (start/stop/restart/delete), security events (blocked or failed actions), admin actions (password reset, log export), intelligent alerts, and DockLog version updates.
 - **Email (SMTP)** is planned; the UI lists it as coming soon.
+
+**Custom webhook JSON payloads** (`Content-Type: application/json`):
+
+- **Audit / admin events** — `type: "audit"` with `title`, `user`, `action`, `resource`, `status`, `message`, `timestamp`, `source`
+- **Alert rules** — `type: "alert"` with `title`, `ruleId`, `severity`, `container`, `host`, `source`, `message`, `recovery`, `timestamp`
 
 Legacy env-based webhook URLs are migrated into `notification_channels` on first startup if present.
 
@@ -199,14 +266,16 @@ volumes:
 
 **Option B — run DockLog inside the cluster** with a ServiceAccount that can list pods/namespaces (in-cluster config is detected automatically).
 
-**Docker Desktop / local clusters:** kubeconfig often points at `https://127.0.0.1:PORT`. Inside a container that address is unreachable, so DockLog rewrites it to `host.docker.internal` and sets TLS `ServerName=localhost` to match the Docker Desktop certificate. If you still see TLS errors after `docker compose up -d --build`, set `K8S_INSECURE_SKIP_TLS_VERIFY=true` in `the environments`.
+**Docker Desktop / local clusters:** kubeconfig often points at `https://127.0.0.1:PORT`. Inside a container that address is unreachable, so DockLog rewrites it to `host.docker.internal` and sets TLS `ServerName=localhost` to match the Docker Desktop certificate. If you still see TLS errors after `docker compose up -d --build`, set `K8S_INSECURE_SKIP_TLS_VERIFY=true` in your environment.
 
 ### Production checklist
 
 1. Generate and set a strong `SECRET_KEY`:
-  ```bash
-   openssl rand -base64 32
-  ```
+
+```bash
+openssl rand -base64 32
+```
+
 2. Set `ENV=production` (or `GO_ENV=production`).
 3. Keep `CLIENT_ACCESS=strict`.
 4. Run behind Nginx, Traefik, or Caddy with HTTPS and set `TRUST_PROXY=true`.
@@ -215,13 +284,11 @@ volumes:
 
 ### Client access
 
-
 | Client                  | How it connects                                                           |
 | ----------------------- | ------------------------------------------------------------------------- |
 | **Vue web UI**          | Served by DockLog; sends `X-DockLog-Client: web` and passes origin checks |
 | **Native mobile app**   | Standard JWT after `POST /api/token`; no extra headers published here     |
 | **curl / random sites** | Blocked when `CLIENT_ACCESS=strict`                                       |
-
 
 Set `CLIENT_ACCESS=off` only for local debugging.
 
@@ -260,11 +327,9 @@ Users only see containers matching their assigned rules.
 
 ## 🔑 Default Login
 
-
 | Username | Password   |
 | -------- | ---------- |
 | `admin`  | `admin123` |
-
 
 > [!WARNING]
 > Change the default administrator password immediately after first login.
@@ -344,7 +409,6 @@ docklog
 
 ### CLI commands
 
-
 | Command                                | Description                                                     |
 | -------------------------------------- | --------------------------------------------------------------- |
 | `docklog`                              | Run full dashboard (default)                                    |
@@ -355,7 +419,6 @@ docklog
 | `docklog config`                       | Print non-secret configuration                                  |
 | `docklog version`                      | Print version                                                   |
 | `docklog help [command]`               | Show help                                                       |
-
 
 ```bash
 docklog help agent-only
@@ -387,6 +450,8 @@ Recommended:
 
 # 📚 Documentation
 
+- [Official Website](https://www.docklog.dev)
+- [Online Documentation & Guides](https://www.docklog.dev/docs)
 - [Architecture Overview](docs/ARCHITECTURE.md)
 - [Security & RBAC](docs/SECURITY.md)
 
@@ -394,13 +459,11 @@ Recommended:
 
 # 📈 Performance
 
-
 | Metric         | Value            |
 | -------------- | ---------------- |
 | RAM usage      | ~30–50 MB        |
 | Log throughput | 10k+ lines/sec   |
 | Deployment     | Single container |
-
 
 ---
 
@@ -408,7 +471,6 @@ Recommended:
 
 - Log retention controls
 - Multi-host support
-- Kubernetes support
 - External authentication providers
 
 ---
@@ -423,7 +485,7 @@ Recommended:
 
 # 📦 Docker Hub
 
-[https://hub.docker.com/r/aimldev/docklog](https://hub.docker.com/r/aimldev/docklog) 
+[https://hub.docker.com/r/aimldev/docklog](https://hub.docker.com/r/aimldev/docklog)
 
 ---
 
