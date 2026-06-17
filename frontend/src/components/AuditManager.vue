@@ -73,8 +73,8 @@
             <th>Details</th>
           </tr>
         </thead>
-        <tbody v-if="filteredLogs.length > 0">
-          <tr v-for="log in filteredLogs" :key="log.id" class="audit-row">
+        <tbody v-if="auditLogs.length > 0">
+          <tr v-for="log in auditLogs" :key="log.id" class="audit-row">
             <td class="time-cell" data-label="Time">
               <span class="date-part">{{
                 formatAuditDate(log.timestamp)
@@ -140,7 +140,7 @@
                     @click="resetFilters"
                     class="btn-secondary mini mt-4"
                   >
-                    Clear Date Filters
+                    Clear Filters
                   </button>
                 </div>
               </div>
@@ -148,6 +148,56 @@
           </tr>
         </tbody>
       </table>
+    </div>
+
+    <div v-if="totalLogs > 0" class="audit-pagination">
+      <div class="pagination-meta">
+        <span>
+          Page {{ page }} of {{ totalPages }} · {{ totalLogs.toLocaleString() }} events
+        </span>
+        <label class="page-size-control">
+          <span>Per page</span>
+          <select v-model.number="pageSize" class="page-size-select" @change="changePageSize">
+            <option v-for="size in pageSizeOptions" :key="size" :value="size">
+              {{ size }}
+            </option>
+          </select>
+        </label>
+      </div>
+      <div class="pagination-actions">
+        <button
+          type="button"
+          class="page-btn"
+          :disabled="page <= 1 || loadingLogs"
+          @click="goToPage(1)"
+        >
+          First
+        </button>
+        <button
+          type="button"
+          class="page-btn"
+          :disabled="page <= 1 || loadingLogs"
+          @click="goToPage(page - 1)"
+        >
+          Previous
+        </button>
+        <button
+          type="button"
+          class="page-btn"
+          :disabled="page >= totalPages || loadingLogs"
+          @click="goToPage(page + 1)"
+        >
+          Next
+        </button>
+        <button
+          type="button"
+          class="page-btn"
+          :disabled="page >= totalPages || loadingLogs"
+          @click="goToPage(totalPages)"
+        >
+          Last
+        </button>
+      </div>
     </div>
 
     <!-- DATE RANGE MODAL -->
@@ -243,9 +293,18 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { apiFetch } from "../utils/apiFetch";
 import { apiErrorMessage, readApiError } from "../utils/authSession";
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
+const DEFAULT_PAGE_SIZE = 10;
+
+const normalizePageSize = (value) => {
+  const parsed = Number(value);
+  return PAGE_SIZE_OPTIONS.includes(parsed) ? parsed : DEFAULT_PAGE_SIZE;
+};
 
 const props = defineProps({
   token: String,
@@ -253,12 +312,23 @@ const props = defineProps({
 });
 const emit = defineEmits(["update-count"]);
 
+const route = useRoute();
+const router = useRouter();
+
 const auditLogs = ref([]);
 const loadingLogs = ref(false);
 const loadError = ref("");
 const auditSearch = ref("");
 const showDateModal = ref(false);
 const dateRange = ref({ from: "", to: "" });
+const page = ref(1);
+const pageSize = ref(DEFAULT_PAGE_SIZE);
+const pageSizeOptions = PAGE_SIZE_OPTIONS;
+const totalLogs = ref(0);
+const totalPages = ref(0);
+
+let searchTimer = null;
+let urlSyncing = false;
 
 const dateLabel = computed(() => {
   if (!dateRange.value.from || !dateRange.value.to) return "Filter Date";
@@ -273,19 +343,60 @@ const dateLabel = computed(() => {
   return `${f} - ${t}`;
 });
 
-const hasFilters = computed(() => dateRange.value.from || dateRange.value.to);
+const hasFilters = computed(
+  () => dateRange.value.from || dateRange.value.to || auditSearch.value,
+);
 
-const filteredLogs = computed(() => {
-  if (!auditSearch.value) return auditLogs.value;
-  const q = auditSearch.value.toLowerCase();
-  return auditLogs.value.filter(
-    (l) =>
-      l.username.toLowerCase().includes(q) ||
-      l.action.toLowerCase().includes(q) ||
-      l.resource.toLowerCase().includes(q) ||
-      l.message.toLowerCase().includes(q),
-  );
-});
+const buildAuditUrl = () => {
+  const params = new URLSearchParams({
+    page: String(page.value),
+    limit: String(pageSize.value),
+  });
+  if (dateRange.value.from && dateRange.value.to) {
+    params.set("from", dateRange.value.from.replace("T", " ") + ":00");
+    params.set("to", dateRange.value.to.replace("T", " ") + ":59");
+  }
+  if (auditSearch.value.trim()) {
+    params.set("q", auditSearch.value.trim());
+  }
+  return `/api/admin/audit?${params.toString()}`;
+};
+
+const syncStateFromUrl = () => {
+  const query = route.query;
+  page.value = Math.max(1, Number.parseInt(String(query.page || "1"), 10) || 1);
+  pageSize.value = normalizePageSize(query.limit ?? query.size);
+  auditSearch.value = typeof query.q === "string" ? query.q : "";
+  dateRange.value = {
+    from: typeof query.from === "string" ? query.from : "",
+    to: typeof query.to === "string" ? query.to : "",
+  };
+};
+
+const updateUrl = async () => {
+  const query = { ...route.query };
+  query.page = String(page.value);
+  query.limit = String(pageSize.value);
+  delete query.size;
+
+  if (auditSearch.value.trim()) {
+    query.q = auditSearch.value.trim();
+  } else {
+    delete query.q;
+  }
+
+  if (dateRange.value.from && dateRange.value.to) {
+    query.from = dateRange.value.from;
+    query.to = dateRange.value.to;
+  } else {
+    delete query.from;
+    delete query.to;
+  }
+
+  urlSyncing = true;
+  await router.replace({ query });
+  urlSyncing = false;
+};
 
 const getActionClass = (action) => {
   const a = action.toLowerCase();
@@ -309,16 +420,19 @@ const fetchAuditLogs = async () => {
   loadingLogs.value = true;
   loadError.value = "";
   try {
-    let url = "/api/admin/audit";
-    if (dateRange.value.from && dateRange.value.to) {
-      const from = dateRange.value.from.replace("T", " ") + ":00";
-      const to = dateRange.value.to.replace("T", " ") + ":59";
-      url += `?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
-    }
-    const res = await apiFetch(url);
+    const res = await apiFetch(buildAuditUrl());
     if (res.ok) {
-      auditLogs.value = await res.json();
-      emit("update-count", auditLogs.value.length);
+      const data = await res.json();
+      auditLogs.value = data.logs || [];
+      totalLogs.value = data.total || 0;
+      totalPages.value = data.pages || 0;
+      page.value = data.page || 1;
+      if (totalPages.value > 0 && page.value > totalPages.value) {
+        page.value = totalPages.value;
+        await fetchAuditLogs();
+        return;
+      }
+      emit("update-count", totalLogs.value);
     } else {
       const err = await readApiError(res, "Failed to load audit logs");
       loadError.value = apiErrorMessage(err, "Failed to load audit logs");
@@ -329,6 +443,20 @@ const fetchAuditLogs = async () => {
   } finally {
     loadingLogs.value = false;
   }
+};
+
+const goToPage = async (nextPage) => {
+  if (nextPage < 1 || nextPage > totalPages.value || nextPage === page.value) return;
+  page.value = nextPage;
+  await updateUrl();
+  fetchAuditLogs();
+};
+
+const changePageSize = async () => {
+  pageSize.value = normalizePageSize(pageSize.value);
+  page.value = 1;
+  await updateUrl();
+  fetchAuditLogs();
 };
 
 const setPreset = (type) => {
@@ -360,13 +488,18 @@ const setPreset = (type) => {
   }
 };
 
-const applyDateRange = () => {
+const applyDateRange = async () => {
   showDateModal.value = false;
+  page.value = 1;
+  await updateUrl();
   fetchAuditLogs();
 };
 
-const resetFilters = () => {
+const resetFilters = async () => {
   dateRange.value = { from: "", to: "" };
+  auditSearch.value = "";
+  page.value = 1;
+  await updateUrl();
   fetchAuditLogs();
 };
 
@@ -379,7 +512,30 @@ const formatAuditTimeOnly = (ts) =>
     hour12: false,
   });
 
-onMounted(fetchAuditLogs);
+onMounted(async () => {
+  syncStateFromUrl();
+  await updateUrl();
+  fetchAuditLogs();
+});
+
+watch(
+  () => route.query,
+  (query, previous) => {
+    if (urlSyncing) return;
+    if (JSON.stringify(query) === JSON.stringify(previous)) return;
+    syncStateFromUrl();
+    fetchAuditLogs();
+  },
+);
+
+watch(auditSearch, () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(async () => {
+    page.value = 1;
+    await updateUrl();
+    fetchAuditLogs();
+  }, 300);
+});
 </script>
 
 <style scoped>
@@ -744,6 +900,50 @@ onMounted(fetchAuditLogs);
   margin-bottom: 1rem;
 }
 
+.audit-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-card);
+}
+
+.pagination-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.8rem;
+  color: var(--text-mute);
+  font-weight: 700;
+}
+
+.page-size-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.page-size-select {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-main);
+  padding: 0.35rem 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.pagination-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .filter-group {
   display: flex;
   gap: 0.5rem;
@@ -827,6 +1027,13 @@ onMounted(fetchAuditLogs);
 }
 
 @media (max-width: 850px) {
+  .audit-pagination {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .pagination-actions {
+    justify-content: space-between;
+  }
   .premium-table thead {
     display: none;
   }

@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"docklog/controllers"
 	"docklog/db"
@@ -173,28 +174,60 @@ func (s *Server) registerAdminRoutes(r *echo.Group) {
 	})
 
 	admin.GET("/audit", func(c echo.Context) error {
-		from := c.QueryParam("from")
-		to := c.QueryParam("to")
+		from := strings.TrimSpace(c.QueryParam("from"))
+		to := strings.TrimSpace(c.QueryParam("to"))
+		search := strings.TrimSpace(c.QueryParam("q"))
 
-		query := "SELECT id, user_id, username, action, resource, status, message, timestamp FROM audit_logs"
-		args := []interface{}{}
+		page, _ := strconv.Atoi(c.QueryParam("page"))
+		if page < 1 {
+			page = 1
+		}
+		limit, _ := strconv.Atoi(c.QueryParam("limit"))
+		if limit == 0 {
+			limit, _ = strconv.Atoi(c.QueryParam("size"))
+		}
+		limit = normalizeAuditPageSize(limit)
+		offset := (page - 1) * limit
 
+		conditions := make([]string, 0, 3)
+		args := make([]interface{}, 0, 6)
 		if from != "" && to != "" {
-			query += " WHERE timestamp BETWEEN ? AND ?"
+			conditions = append(conditions, "timestamp BETWEEN ? AND ?")
 			args = append(args, from, to)
 		}
+		if search != "" {
+			like := "%" + search + "%"
+			conditions = append(conditions, "(username LIKE ? OR action LIKE ? OR resource LIKE ? OR message LIKE ?)")
+			args = append(args, like, like, like, like)
+		}
 
-		query += " ORDER BY timestamp DESC LIMIT 1000"
-		rows, err := db.DB.Query(query, args...)
+		whereClause := ""
+		if len(conditions) > 0 {
+			whereClause = " WHERE " + strings.Join(conditions, " AND ")
+		}
+
+		var total int
+		countQuery := "SELECT COUNT(*) FROM audit_logs" + whereClause
+		if err := db.DB.QueryRow(countQuery, args...).Scan(&total); err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to count audit logs: " + err.Error()})
+		}
+
+		query := "SELECT id, user_id, username, action, resource, status, message, timestamp FROM audit_logs" +
+			whereClause + " ORDER BY timestamp DESC LIMIT ? OFFSET ?"
+		queryArgs := append(append([]interface{}{}, args...), limit, offset)
+		rows, err := db.DB.Query(query, queryArgs...)
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to fetch audit logs: " + err.Error()})
 		}
 		defer rows.Close()
+
 		logs := make([]map[string]interface{}, 0)
 		for rows.Next() {
 			var id, userID int
 			var username, action, resource, status, message, timestamp string
-			rows.Scan(&id, &userID, &username, &action, &resource, &status, &message, &timestamp)
+			if err := rows.Scan(&id, &userID, &username, &action, &resource, &status, &message, &timestamp); err != nil {
+				continue
+			}
 			logs = append(logs, map[string]interface{}{
 				"id":        id,
 				"user_id":   userID,
@@ -206,7 +239,19 @@ func (s *Server) registerAdminRoutes(r *echo.Group) {
 				"timestamp": timestamp,
 			})
 		}
-		return c.JSON(http.StatusOK, logs)
+
+		pages := 0
+		if total > 0 {
+			pages = (total + limit - 1) / limit
+		}
+
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"logs":  logs,
+			"total": total,
+			"page":  page,
+			"pages": pages,
+			"limit": limit,
+		})
 	})
 
 	s.registerNotificationRoutes(admin)
@@ -246,4 +291,13 @@ func (s *Server) resolveNotificationSessionUser(c echo.Context) (controllers.Ses
 	token := c.Get("user").(*jwt.Token)
 	claims := token.Claims.(*models.UserClaims)
 	return controllers.SessionUser{ID: claims.ID, Username: claims.Username}, nil
+}
+
+func normalizeAuditPageSize(limit int) int {
+	switch limit {
+	case 10, 25, 50, 100:
+		return limit
+	default:
+		return 10
+	}
 }
