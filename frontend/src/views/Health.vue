@@ -257,6 +257,18 @@ const activeHistory = computed(() => {
   });
 });
 
+const activeRange = computed(() => {
+  if (activeFilter.value === "custom" && customStart.value && customEnd.value) {
+    const start = new Date(customStart.value);
+    const end = new Date(customEnd.value);
+    end.setHours(23, 59, 59);
+    return { start, end };
+  }
+  const end = new Date();
+  const start = new Date(end.getTime() - activeFilter.value * 60 * 60 * 1000);
+  return { start, end };
+});
+
 const avgCpu = computed(() => {
   if (!activeHistory.value.length) return 0;
   return (activeHistory.value.reduce((acc, h) => acc + h.cpu, 0) / activeHistory.value.length).toFixed(1);
@@ -357,8 +369,24 @@ const makeChartOptions = (unit) => ({
   },
 });
 
-const cpuChartOptions = computed(() => makeChartOptions("%"));
-const memChartOptions = computed(() => makeChartOptions("GB"));
+const cpuChartOptions = computed(() => {
+  const opts = makeChartOptions("%");
+  const values = chartData.value.cpu.datasets[0]?.data?.filter((v) => v != null) ?? [];
+  const dataMax = values.length ? Math.max(...values) : 0;
+  if (dataMax > 0) {
+    opts.scales.y.suggestedMax = Math.min(100, Math.ceil(dataMax * 1.15));
+  }
+  return opts;
+});
+const memChartOptions = computed(() => {
+  const opts = makeChartOptions("GB");
+  const values = chartData.value.mem.datasets[0]?.data?.filter((v) => v != null) ?? [];
+  const dataMax = values.length ? Math.max(...values) : 0;
+  if (dataMax > 0) {
+    opts.scales.y.suggestedMax = Math.ceil(dataMax * 1.15 * 100) / 100;
+  }
+  return opts;
+});
 
 watch(
   () => sharedState.theme,
@@ -385,80 +413,71 @@ const fetchData = async () => {
 };
 
 const updateCharts = () => {
+  const { start: startTime, end: endTime } = activeRange.value;
+  const rangeHours = Math.max((endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60), 1 / 60);
   const now = new Date();
-  let rangeHours = activeFilter.value;
-  let startTime;
-  
-  if (activeFilter.value === "custom") {
-    const start = new Date(customStart.value);
-    const end = new Date(customEnd.value);
-    end.setHours(23, 59, 59);
-    rangeHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-    startTime = start;
-  } else {
-    startTime = new Date(now.getTime() - rangeHours * 60 * 60 * 1000);
-  }
-  
-  // 1. Generate Fixed Timeline Bins (e.g., 60 bins for any range)
+
+  // 1. Generate fixed timeline bins (e.g., 60 bins for any range)
   const binCount = 60;
   const binSizeMs = (rangeHours * 60 * 60 * 1000) / binCount;
   const timeline = [];
-  
+
   for (let i = 0; i <= binCount; i++) {
     const t = new Date(startTime.getTime() + i * binSizeMs);
     const isToday = t.toDateString() === now.toDateString();
     const label = isToday
-      ? t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      : t.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      
+      ? t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      : `${t.toLocaleDateString([], { month: "short", day: "numeric" })} ${t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+
     timeline.push({
       time: t,
-      label: label,
+      label,
       cpu: null,
-      mem: null
+      mem: null,
     });
   }
 
-  // 2. Map actual history to bins
-  // Since history is sorted ascending, we can efficiently map it
-  history.value.forEach(h => {
+  // 2. Map filtered history to bins (peak CPU + peak memory per bin, matching summary cards)
+  activeHistory.value.forEach((h) => {
     const hTime = new Date(h.timestamp);
-    if (hTime < startTime) return;
-    
     const binIndex = Math.floor((hTime.getTime() - startTime.getTime()) / binSizeMs);
     if (binIndex >= 0 && binIndex <= binCount) {
-      // Use latest value in the bin
-      timeline[binIndex].cpu = h.cpu;
-      timeline[binIndex].mem = h.memory;
+      const bin = timeline[binIndex];
+      bin.cpu = bin.cpu === null ? h.cpu : Math.max(bin.cpu, h.cpu);
+      bin.mem = bin.mem === null ? h.memory : Math.max(bin.mem, h.memory);
     }
   });
 
-  const labels = timeline.map(t => t.label);
-  
+  const labels = timeline.map((t) => t.label);
+
   chartData.value.cpu = {
     labels,
-    datasets: [{
-      label: "CPU Load",
-      data: timeline.map(t => t.cpu),
-      borderColor: "#0891b2",
-      backgroundColor: "rgba(8, 145, 178, 0.12)",
-      fill: true,
-      borderWidth: 3,
-      spanGaps: true // Connect gaps if any, or keep false to show missing data
-    }]
+    datasets: [
+      {
+        label: "CPU Load",
+        data: timeline.map((t) => t.cpu),
+        borderColor: "#0891b2",
+        backgroundColor: "rgba(8, 145, 178, 0.12)",
+        fill: true,
+        borderWidth: 3,
+        spanGaps: true,
+      },
+    ],
   };
 
   chartData.value.mem = {
     labels,
-    datasets: [{
-      label: "Memory Usage",
-      data: timeline.map(t => t.mem ? t.mem / (1024 * 1024 * 1024) : null),
-      borderColor: "#10b981",
-      backgroundColor: "rgba(16, 185, 129, 0.1)",
-      fill: true,
-      borderWidth: 3,
-      spanGaps: true
-    }]
+    datasets: [
+      {
+        label: "Memory Usage",
+        data: timeline.map((t) => (t.mem != null ? t.mem / (1024 * 1024 * 1024) : null)),
+        borderColor: "#10b981",
+        backgroundColor: "rgba(16, 185, 129, 0.1)",
+        fill: true,
+        borderWidth: 3,
+        spanGaps: true,
+      },
+    ],
   };
 };
 
