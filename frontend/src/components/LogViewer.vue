@@ -315,7 +315,7 @@
         </div>
 
         <div v-for="(log, i) in displayLogs" :key="logLineKey(log, i)" class="log-line">
-          <span class="line-num">{{ i + 1 }}</span>
+          <span class="line-time">{{ formatLogLineTime(log) }}</span>
           <span class="line-text" v-html="formatLog(log)"></span>
         </div>
         <div v-if="displayLogs.length === 0" class="log-empty">
@@ -448,12 +448,51 @@ const escapeHtml = (str) =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
+const LOG_TIMESTAMP_RE =
+  /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)\s?(.*)$/s;
+
+const LOG_MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
+const parseLogLine = (text) => {
+  const match = String(text).match(LOG_TIMESTAMP_RE);
+  if (!match) {
+    return { timestamp: null, message: text };
+  }
+
+  const timestamp = new Date(match[1]);
+  if (Number.isNaN(timestamp.getTime())) {
+    return { timestamp: null, message: text };
+  }
+
+  return { timestamp, message: match[2] };
+};
+
+const formatLogTimestamp = (date) => {
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${LOG_MONTHS[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+};
+
+const formatLogLineTime = (text) => {
+  const { timestamp } = parseLogLine(text);
+  return timestamp ? formatLogTimestamp(timestamp) : "";
+};
+
 const formatLog = (text) => {
-  // Strip Docker timestamp if present (it's always at the start)
-  let cleanText = text.replace(
-    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z\s?/,
-    "",
-  );
+  const { message } = parseLogLine(text);
+  let cleanText = message;
 
   let formatted = escapeHtml(cleanText.replace(/\033\[[0-9;]*m/g, ""))
     .replace(/(ERROR|ERR|Fail|Failed)/gi, '<span class="text-error">$1</span>')
@@ -488,8 +527,13 @@ const displayLogs = computed(() => {
   return source;
 });
 
-const logLineKey = (log, index) =>
-  `${index}-${log.length}-${log.slice(0, 24)}-${log.slice(-12)}`;
+const logLineKey = (log, index) => {
+  const { timestamp } = parseLogLine(log);
+  if (timestamp) {
+    return `${timestamp.toISOString()}-${log.length}-${log.slice(-12)}`;
+  }
+  return `${index}-${log.length}-${log.slice(0, 24)}-${log.slice(-12)}`;
+};
 
 const scrollToBottom = () => {
   if (logContainer.value) {
@@ -859,7 +903,8 @@ watch(
   background: var(--log-bg);
   border-radius: 20px;
   overflow: hidden;
-  height: calc(100vh - 140px);
+  height: 100%;
+  min-height: 0;
 }
 
 .viewer-header {
@@ -988,6 +1033,7 @@ watch(
 
 .viewer-body {
   flex: 1;
+  min-height: 0;
   position: relative;
   overflow: hidden;
 }
@@ -1017,14 +1063,14 @@ watch(
   margin-bottom: 0.2rem;
 }
 
-.line-num {
-  color: var(--text-mute);
-  width: 40px;
-  text-align: right;
+.line-time {
+  color: var(--accent);
+  width: 11.5rem;
   flex-shrink: 0;
   user-select: none;
   font-size: 0.7rem;
-  opacity: 0.5;
+  opacity: 0.9;
+  white-space: nowrap;
 }
 
 .line-text {
@@ -1165,8 +1211,8 @@ watch(
   .log-line {
     gap: 0.75rem;
   }
-  .line-num {
-    width: 28px;
+  .line-time {
+    width: 9.5rem;
     font-size: 0.6rem;
   }
   .line-text {
@@ -1182,8 +1228,8 @@ watch(
   .log-content {
     padding: 0.75rem;
   }
-  .line-num {
-    width: 24px;
+  .line-time {
+    width: 8.5rem;
     font-size: 0.55rem;
   }
   .line-text {

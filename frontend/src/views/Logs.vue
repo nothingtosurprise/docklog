@@ -959,12 +959,20 @@ watch(() => route.query, syncStateFromUrl, { immediate: true });
 .logs-main-content {
   flex: 1;
   min-width: 0;
-  padding: 2.5rem;
-  overflow-y: auto;
+  min-height: 0;
+  padding: 1.5rem;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 .logs-grid {
   display: grid;
   gap: 1.5rem;
+  flex: 1;
+  min-height: 0;
+}
+.logs-grid > :deep(.log-viewer) {
+  min-height: 0;
   height: 100%;
 }
 .grid-single {
@@ -1213,7 +1221,8 @@ watch(() => route.query, syncStateFromUrl, { immediate: true });
 
   .logs-main-content {
     padding: 1rem;
-    height: 100vh;
+    height: 100%;
+    min-height: 0;
     z-index: 1;
     position: relative;
   }
